@@ -2,8 +2,8 @@
 #
 
 CC      = gcc
-CFLAGS  = -Wall -O2
-LDFLAGS =
+CFLAGS  = -Wall -O2 -g
+LDFLAGS = -Wl,--no-as-needed -lm
 
 # CFLAGS += -g
 

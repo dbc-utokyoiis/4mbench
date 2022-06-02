@@ -8,6 +8,8 @@
 #include <errno.h>
 #include <assert.h>
 #include <time.h>
+#include <math.h>
+#include <limits.h>
 
 
 /*
@@ -15,7 +17,8 @@
  */
 
 #define NBUF 512
-#define TS_BASE 1648767600 /* 2022-04-01 08:00:00 at Tokyo */
+#define TSBASE 1648771200 /* 2022-04-01 09:00:00 at Tokyo */
+#define TSEQUIPMENTWARMUP (30*60)
 #define NPACKAGE_TO_PRODUCE 100
 #define NITERATION 1
 
@@ -36,6 +39,18 @@ struct equipment_t {
 #define NEQUIPMENT 9
 struct equipment_t equipment[NEQUIPMENT];
 int nequipment = 0;
+char *ename2[NEQUIPMENT] =
+  {
+   "DOUGH ADJUSTMENT EQUIPMENT",
+   "BAKING EQUIPMENT",
+   "FINISHING EQUIPMENT",
+   "BOXING EQUIPMENT",
+   "WRAPPING EQUIPMENT",
+   "PACKING EQUIPMENT",
+   "PRINTING EQUIPMENT",
+   "PALLETIZING EQUIPMENT",
+   "STORAGING EQUIPMENT"
+  };
 
 struct procedure_t {
   int pid;          /* procedure id */
@@ -44,6 +59,18 @@ struct procedure_t {
 #define NPROCEDURE 9
 struct procedure_t procedure[NPROCEDURE];
 int nprocedure = 0;
+char *pname2[NPROCEDURE] =
+  {
+   "DOUGH ADJUSTMENT",
+   "BAKING",
+   "FINISHING",
+   "BOXING",
+   "WRAPPING",
+   "PACKING",
+   "PRINTING",
+   "PALLETIZING",
+   "STORAGING"
+  };
 
 struct operationlog_t {
   long olid;       /* operation log id */
@@ -51,8 +78,8 @@ struct operationlog_t {
   int wid;         /* worker id */
   int eid;         /* equipment id */
   int pid;         /* process id */
-  double ts_begin; /* timestamp in starting */
-  double ts_end;   /* timestamp in ending */
+  double tsbegin;  /* timestamp in starting */
+  double tsend;    /* timestamp in ending */
 };
 #define NOPERATIONLOG (1024 * 1024 * 100)
 struct operationlog_t *operationlog;
@@ -92,6 +119,7 @@ char *mtypename[NMTYPE] =
    "",
    ""
   };
+
 
 double processinglatency[NPROCEDURE] =
   {
@@ -145,41 +173,215 @@ int nmaterial_to_append[NPROCEDURE] =
    0
   };
 
+#define NMSENSOR 6
+#define MSENSOR_WGHT 0
+#define MSENSOR_DIMX 1
+#define MSENSOR_DIMY 2
+#define MSENSOR_DIMZ 3
+#define MSENSOR_SHPS 4
+#define MSENSOR_TEMP 5
+struct msensormodel_t {
+  int modeltype;
+  double median;
+  double errorrange;
+};
+#define MODELTYPE_FULLNDIST 11
+#define MODELTYPE_HALFNDIST 21
+struct msensormodel_t msensormodel[NMTYPE][NMSENSOR] =
+  {
+   { /* MT00 */
+    {MODELTYPE_FULLNDIST, 100.0, 2.0},  /* MSENSOR_WGHT */
+    {MODELTYPE_FULLNDIST, 5.0,   0.5},  /* MSENSOR_DIMX */
+    {MODELTYPE_FULLNDIST, 5.0,   0.5},  /* MSENSOR_DIMY */
+    {MODELTYPE_FULLNDIST, 1.0,   0.1},  /* MSENSOR_DIMZ */
+    {MODELTYPE_HALFNDIST, 1.00,  0.02}, /* MSENSOR_SHPS */
+    {MODELTYPE_FULLNDIST, 3.5,   1.5}   /* MSENSOR_TEMP */
+   },
+   { /* MT01 */
+    {MODELTYPE_FULLNDIST, 100.0, 2.0},
+    {MODELTYPE_FULLNDIST, 5.0,   0.5},
+    {MODELTYPE_FULLNDIST, 5.0,   0.5},
+    {MODELTYPE_FULLNDIST, 1.0,   0.1},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 3.5,   1.5}
+   },
+   { /* MT02 */
+    {MODELTYPE_FULLNDIST, 90.0,  1.0},
+    {MODELTYPE_FULLNDIST, 4.5,   0.4},
+    {MODELTYPE_FULLNDIST, 4.5,   0.4},
+    {MODELTYPE_FULLNDIST, 0.0,   0.09},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 180.0, 2.0}
+   },
+   { /* MT03 */
+    {MODELTYPE_FULLNDIST, 90.0,  1.0},
+    {MODELTYPE_FULLNDIST, 4.5,   0.4},
+    {MODELTYPE_FULLNDIST, 4.5,   0.4},
+    {MODELTYPE_FULLNDIST, 0.0,   0.09},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT04 */
+    {MODELTYPE_FULLNDIST, 600.0, 7.0},
+    {MODELTYPE_FULLNDIST, 10.0,  0.1},
+    {MODELTYPE_FULLNDIST, 5.0,   0.1},
+    {MODELTYPE_FULLNDIST, 5.0,   0.1},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT05 */
+    {MODELTYPE_FULLNDIST, 600.0, 7.0},
+    {MODELTYPE_FULLNDIST, 10.0,  0.1},
+    {MODELTYPE_FULLNDIST, 5.0,   0.1},
+    {MODELTYPE_FULLNDIST, 5.0,   0.1},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT06 */
+    {MODELTYPE_FULLNDIST, 14400.0, 160.0},
+    {MODELTYPE_FULLNDIST, 10.0,  0.1},
+    {MODELTYPE_FULLNDIST, 31.0,  0.6},
+    {MODELTYPE_FULLNDIST, 21.0,  0.4},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT07 */
+    {MODELTYPE_FULLNDIST, 14400.0, 160.0},
+    {MODELTYPE_FULLNDIST, 10.0,  0.1},
+    {MODELTYPE_FULLNDIST, 31.0,  0.6},
+    {MODELTYPE_FULLNDIST, 21.0,  0.4},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT08 */
+    {MODELTYPE_FULLNDIST, 692000.0, 7680.0},
+    {MODELTYPE_FULLNDIST, 42.0,  0.4},
+    {MODELTYPE_FULLNDIST, 95.0,  1.8},
+    {MODELTYPE_FULLNDIST, 85.0,  1.6},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   },
+   { /* MT09 */
+    {MODELTYPE_FULLNDIST, 692000.0, 7680.0},
+    {MODELTYPE_FULLNDIST, 42.0,  0.4},
+    {MODELTYPE_FULLNDIST, 95.0,  1.8},
+    {MODELTYPE_FULLNDIST, 85.0,  1.6},
+    {MODELTYPE_HALFNDIST, 1.00,  0.02},
+    {MODELTYPE_FULLNDIST, 20.0,  15.0}
+   }
+  };
+#define MSENSOR_ERRORSCALE 5
+
+struct equipmentlog_t {
+  long elid;       /* equipment log id */
+  int lid;         /* line id */
+  int eid;         /* equipment id */
+  double ts;       /* timestamp */
+  int esensor;     /* sensor */
+  int ereading;    /* reading */
+};
+#define NEQUIPMENTLOG (3600 * 2 * 1024)
+struct equipmentlog_t *equipmentlog;
+long nequipmentlog /* = 0 */;
+int esensors[NEQUIPMENT][2] =
+  {
+   {0, 9}, /* 0 */
+   {1, 9}, /* 1 */
+   {2, 9}, /* 2 */
+   {3, 9}, /* 3 */
+   {4, 9}, /* 4 */
+   {5, 9}, /* 5 */
+   {6, 9}, /* 6 */
+   {7, 9}, /* 7 */
+   {8, 9}, /* 8 */
+  };
+
+struct esensormodel_t {
+  char *sensorname;
+  int modeltype;
+  double median;
+  double errorrange;
+};
+struct esensormodel_t esensormodel[NEQUIPMENT + 1] =
+  {
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 125.0, 15.0},  /* 0 */
+   {"TEMPERATURE", MODELTYPE_FULLNDIST, 180.0, 2.0},   /* 1 */
+   {"TEMPERATURE", MODELTYPE_FULLNDIST, 47.5,  7.5},   /* 2 */
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 3 */
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 4 */
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 5 */
+   {"INK LEFT",    MODELTYPE_FULLNDIST, 55.0,  45.0},  /* 6 */
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 7 */
+   {"TEMPERATURE", MODELTYPE_FULLNDIST, 20.0,  15.0},  /* 8 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02}   /* 9 */
+  };
+#define ESENSOR_ERRORSCALE 5
+
+#define NCMNTWORD 25
+char *cmntword[NCMNTWORD] =
+  {
+   /* frequently used nouns, https://en.wikipedia.org/wiki/Most_common_words_in_English */
+   "time",
+   "person",
+   "year",
+   "way",
+   "day",
+   "thing",
+   "man", 
+   "world", 
+   "life", 
+   "hand",
+   "part", 
+   "child", 
+   "eye", 
+   "woman", 
+   "place", 
+   "work", 
+   "week", 
+   "case", 
+   "point", 
+   "government", 
+   "company", 
+   "number", 
+   "group", 
+   "problem", 
+   "fact"
+  };
+
 /*
  * put_operationlog(), put_materiallog()
  */
 
 long put_operationlog(int lid,
 		      int wid, int eid, int pid,
-		      double ts_begin, double ts_end)
+		      double tsbegin, double tsend)
 {  
-  if(noperationlog >= NOPERATIONLOG){ fprintf(stderr, "overflow (operationlog)"); exit(EXIT_FAILURE); }
+  if(noperationlog >= NOPERATIONLOG){ fprintf(stderr, "overflow (operationlog)\n"); exit(EXIT_FAILURE); }
   
   operationlog[noperationlog].olid = noperationlog;
   operationlog[noperationlog].lid = lid;
   operationlog[noperationlog].wid = wid;
   operationlog[noperationlog].eid = eid;
   operationlog[noperationlog].pid = pid;
-  operationlog[noperationlog].ts_begin = ts_begin;
-  operationlog[noperationlog].ts_end = ts_end;
+  operationlog[noperationlog].tsbegin = tsbegin;
+  operationlog[noperationlog].tsend = tsend;
   noperationlog++;
   return(operationlog[noperationlog-1].olid);
 }
 
 void update_operationlog_ts(long olid,
-			    double ts_begin, double ts_end)
+			    double tsbegin, double tsend)
 {
-  if(olid != operationlog[olid].olid){ fprintf(stderr, "overflow (operationlog)");  exit(EXIT_FAILURE); }
+  if(olid != operationlog[olid].olid){ fprintf(stderr, "overflow (operationlog)\n");  exit(EXIT_FAILURE); }
 
-  operationlog[olid].ts_begin = ts_begin;
-  operationlog[olid].ts_end = ts_end;
+  operationlog[olid].tsbegin = tsbegin;
+  operationlog[olid].tsend = tsend;
 }
 			    
-
 long put_materiallog(int lid,
 		     int mtype, long olid_src, long olid_dst)
 {
-  if(nmateriallog >= NMATERIALLOG){ fprintf(stderr, "overflow (materiallog)");  exit(EXIT_FAILURE); }
+  if(nmateriallog >= NMATERIALLOG){ fprintf(stderr, "overflow (materiallog)\n");  exit(EXIT_FAILURE); }
 
   materiallog[nmateriallog].mlid = nmateriallog;
   materiallog[nmateriallog].lid = lid;
@@ -256,6 +458,176 @@ struct operationoutput_t *get_operationoutput(int pid)
 }
 
 /*
+ * hash (based on FNV hash algorithm)
+ */
+
+#define FNV_PRIME 16777619U
+#define FNV_BASE  2166136261U
+
+unsigned int hash32_mlid_lid(long mlid, int lid, int key)
+{
+  unsigned int h;
+
+  h = FNV_BASE;
+  h = (FNV_PRIME * h) ^ ((mlid >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 32) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 40) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 48) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((mlid >> 56) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 24) & 0x000000ff);
+  return(h);
+}
+
+unsigned int hash32_t_lid(long t, int lid, int key)
+{
+  unsigned int h;
+
+  h = FNV_BASE;
+  h = (FNV_PRIME * h) ^ ((t >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 32) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 40) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 48) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((t >> 56) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 24) & 0x000000ff);
+  return(h);
+}
+
+/*
+ * generate comment
+ */
+
+void generate_olcomment(char *s, int l, long olid, int lid)
+{
+  snprintf(s, l,
+	   "%s %s %s %s %s",
+	   cmntword[hash32_mlid_lid(olid, lid, 100) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(olid, lid, 101) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(olid, lid, 102) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(olid, lid, 103) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(olid, lid, 1044) % NCMNTWORD]);
+}
+
+void generate_mlcomment(char *s, int l, long mlid, int lid)
+{
+  snprintf(s, l,
+	   "%s %s %s %s %s",	   
+	   cmntword[hash32_mlid_lid(mlid, lid, 201) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(mlid, lid, 202) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(mlid, lid, 203) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(mlid, lid, 204) % NCMNTWORD],
+	   cmntword[hash32_mlid_lid(mlid, lid, 205) % NCMNTWORD]);
+}
+
+/*
+ * generate sensor reading
+ */
+
+inline double ndist_mlid_lid(double average, double deviation, long mlid, int lid, int key)
+{
+  double x, y, z = 0.0;
+  x = (double)(hash32_mlid_lid(mlid, lid, key)) / (UINT_MAX + 1.0);
+  y = (double)(hash32_mlid_lid(mlid, lid, key << 7)) / (UINT_MAX + 1.0);
+  if(x != 0.0 && y != 0.0)
+    z = sqrt(-2 * log(x)) * cos(2 * M_PI * y); /* Box-Muller approximation */
+  return(average + deviation * z);
+}
+
+double generate_msensor_reading(int mtype, int msensor, long mlid, int lid)
+{
+  double r = 0.0;
+  
+  switch(msensormodel[mtype][msensor].modeltype){
+  case MODELTYPE_FULLNDIST:
+    r = ndist_mlid_lid(msensormodel[mtype][msensor].median,
+		       msensormodel[mtype][msensor].errorrange / MSENSOR_ERRORSCALE,
+		       mlid, lid, msensor);
+    break;
+  case MODELTYPE_HALFNDIST:
+    r = ndist_mlid_lid(msensormodel[mtype][msensor].median,
+		       msensormodel[mtype][msensor].errorrange / MSENSOR_ERRORSCALE,
+		       mlid, lid, msensor);
+    if(r > msensormodel[mtype][msensor].median)
+      r = msensormodel[mtype][msensor].median;
+    break;
+  };
+  
+  return(r);
+}
+
+inline double ndist_t_lid(double average, double deviation, int t, int lid, int key)
+{
+  double x, y, z = 0.0;
+  x = (double)(hash32_t_lid(t, lid, key)) / (UINT_MAX + 1.0);
+  y = (double)(hash32_t_lid(t, lid, key << 7)) / (UINT_MAX + 1.0);
+  if(x != 0.0 && y != 0.0)
+    z = sqrt(-2 * log(x)) * cos(2 * M_PI * y); /* Box-Muller approximation */
+  return(average + deviation * z);
+}
+
+double generate_esensor_reading(int esensor, long t, int lid)
+{
+  double r = 0.0;
+  
+  switch(esensormodel[esensor].modeltype){
+  case MODELTYPE_FULLNDIST:
+    r = ndist_t_lid(esensormodel[esensor].median,
+		    esensormodel[esensor].errorrange / ESENSOR_ERRORSCALE,
+		    t, lid, esensor);
+    break;
+  case MODELTYPE_HALFNDIST:
+    r = ndist_t_lid(esensormodel[esensor].median,
+		    esensormodel[esensor].errorrange / ESENSOR_ERRORSCALE,
+		    t, lid, esensor);
+    if(r > esensormodel[esensor].median)
+      r = esensormodel[esensor].median;
+    break;
+  };
+  
+  return(r);
+}
+
+/*
+ * put_equipmentlog()
+ */
+
+long put_equipmentlog(int lid,
+		      int eid,
+		      double ts,
+		      int esensor, int ereading)
+{  
+  if(nequipmentlog >= NEQUIPMENTLOG){ fprintf(stderr, "overflow (equipmentlog)\n"); exit(EXIT_FAILURE); }
+  
+  equipmentlog[nequipmentlog].elid = nequipmentlog;
+  equipmentlog[nequipmentlog].lid = lid;
+  equipmentlog[nequipmentlog].eid = eid;
+  equipmentlog[nequipmentlog].ts  = ts;
+  equipmentlog[nequipmentlog].esensor  = esensor;
+  equipmentlog[nequipmentlog].ereading = ereading;
+  nequipmentlog++;
+  return(equipmentlog[nequipmentlog-1].elid);
+}
+
+/*
  * Initialize
  */
 
@@ -269,7 +641,7 @@ void init(int lid)
   for(i=0; i<NWORKER; i++){
     worker[i].wid = i;
     worker[i].lid = lid;
-    snprintf(worker[i].wname, NBUF-1, "%s%05u%05d", "WORKER", lid, i);
+    snprintf(worker[i].wname, NBUF-1, "%s%06u%06d", "WORKER", lid, i);
   }
 
   /* generate EQUIPMENT */
@@ -278,7 +650,7 @@ void init(int lid)
   for(i=0; i<nequipment; i++){
     equipment[i].eid = i;
     equipment[i].lid = lid;
-    snprintf(equipment[i].ename, NBUF-1, "%s%05u%05d", "EQUIPMENT", lid, i);
+    snprintf(equipment[i].ename, NBUF-1, "%s%06u%06d (%s)", "EQUIPMENT", lid, i, ename2[i]);
   }
 
   /* generate PROCEDURE */
@@ -286,7 +658,7 @@ void init(int lid)
   nprocedure = NPROCEDURE;
   for(i=0; i<nprocedure; i++){
     procedure[i].pid = i;
-    snprintf(procedure[i].pname, NBUF-1, "%s%05d", "PROCEDURE", i);
+    snprintf(procedure[i].pname, NBUF-1, "%s%06d (%s)", "PROCEDURE", i, pname2[i]);
   }
 
   /* allocate OPERATIONLOG */
@@ -303,6 +675,13 @@ void init(int lid)
     exit(EXIT_FAILURE);
   }
 
+  /* allocate EQUIPMENTLOG */
+  printf("Allocating %s for lid=%u ...\n", "EQUIPMENTLOG", lid);
+  if((equipmentlog = malloc(sizeof(struct equipmentlog_t) * NEQUIPMENTLOG)) == NULL){
+    perror("malloc");
+    exit(EXIT_FAILURE);
+  }
+
   init_operationoutput();
 }
 
@@ -310,7 +689,40 @@ void init(int lid)
  * Simulate to generate OPERATIONLOG and MATERIALLOG
  */
 
-double ts_backup = 0.0;
+double tsbackup = 0.0;
+
+void sim_equipmentlog(int lid,
+		      double ts_latest)
+{
+  int i;
+  long t;
+  long t_latest = ts_latest + TSEQUIPMENTWARMUP;
+
+  if(nequipmentlog)
+    t = equipmentlog[nequipmentlog-1].ts;
+  else
+    t = -TSEQUIPMENTWARMUP;
+
+#if 0
+  printf("%ld\n", nequipmentlog);
+  printf("%ld - %ld\n", t, t_latest);
+#endif
+  
+  for(; t <= t_latest; t++){
+    for(i = 0; i < NEQUIPMENT; i++){
+      put_equipmentlog(lid,
+		       i,
+		       (double)t,
+		       i,
+		       generate_esensor_reading(i, t, lid));
+      put_equipmentlog(lid,
+		       i,
+		       (double)t,
+		       NEQUIPMENT,
+		       generate_esensor_reading(NEQUIPMENT, t, lid));
+    }
+  }
+}
 
 void sim(int lid, int np)
 {
@@ -320,6 +732,7 @@ void sim(int lid, int np)
   struct operationoutput_t *p;
   int wid, eid, pid, mtype;
   int n;
+  double ts_max = 0.0;
   
   printf("Generating %s for lid=%u ...\n", "OPERATIONLOG and MATERIALLOG", lid);
 
@@ -335,7 +748,7 @@ void sim(int lid, int np)
    * #0 (PROCEDURE00000) takes MT00
    */
 
-  ts = ts_backup;
+  ts = tsbackup;
   wid = 0, eid = 0, pid = 0, mtype = 0;
   for(i=0; i<n; i++){
     olid_src = -1;
@@ -347,8 +760,9 @@ void sim(int lid, int np)
 			  lid, wid, eid, pid,
 			  ts + processinglatency[pid]);
     ts += processinglatency[pid];
+    if(ts > ts_max){ ts_max = ts; }
   } /* for(i) */
-  ts_backup = ts;
+  tsbackup = ts;
   
   /*
    * #{1...9} (PROCEDURE{00001...00009}) takes MT{01...09}
@@ -361,7 +775,10 @@ void sim(int lid, int np)
       if(get_navailable(pid - 1) < nmaterial_to_pack[pid]){ break; }
       olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
       for(j=0; j<nmaterial_to_pack[pid]; j++){
-	if((p = get_operationoutput(pid - 1)) == NULL){ exit(EXIT_FAILURE); }
+	if((p = get_operationoutput(pid - 1)) == NULL){
+	  fprintf(stderr, "oprationlog broken.\n");
+	  exit(EXIT_FAILURE);
+	}
 	olid_src = p->olid;
 	ts = p->ts;
 	mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
@@ -375,6 +792,7 @@ void sim(int lid, int np)
 	put_operationoutput(mlid, olid_dst,
 			    lid, wid, eid, pid,
 			    ts + processinglatency[pid]);
+      if(ts > ts + processinglatency[pid]){ ts_max = ts + processinglatency[pid]; }
     } /* while(1) */
   } /* for(i) */
 
@@ -389,11 +807,19 @@ void sim(int lid, int np)
     if(get_navailable(pid - 1) < 1){ break; }
     olid_dst = -1;
     for(j=0; j<1; j++){
-      if((p = get_operationoutput(pid - 1)) == NULL){ exit(EXIT_FAILURE); }
+      if((p = get_operationoutput(pid - 1)) == NULL){
+	fprintf(stderr, "oprationlog broken.\n");
+	exit(EXIT_FAILURE);
+      }
       olid_src = p->olid;
       mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
     }
   } /* while(1) */
+
+
+  printf("Generating %s for lid=%u ...\n", "EQUIPMENTLOG", lid);
+
+  sim_equipmentlog(lid, ts_max);
 }
 
 /*
@@ -407,31 +833,36 @@ void unload(int lid)
   char fn[NBUF];
   time_t t1, t2;
   char dt1[NBUF], dt2[NBUF];
-
+  char cmnt[NBUF];
+  
   /* unload WORKER */
-  snprintf(fn, NBUF-1, "%s%05u.dat", "WORKER", lid);
+  snprintf(fn, NBUF-1, "%s%06u.dat", "WORKER", lid);
   printf("Unloading %s (%d records) for lid=%u ...\n", "WORKER", nworker, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# WID, LID, WNAME\n");
   for(i=0; i<nworker; i++){
     assert(lid == worker[i].lid);
-    fprintf(fp, "%d|%d|%s\n", worker[i].wid, worker[i].lid,
+    fprintf(fp, "%d|%d|%s\n",
+	    worker[i].wid, worker[i].lid,
 	    worker[i].wname);
   }
   fclose(fp);
 
   /* unload EQUIPMENT */
-  snprintf(fn, NBUF-1, "%s%05u.dat", "EQUIPMENT", lid);
+  snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENT", lid);
   printf("Unloading %s (%d records) for lid=%u ...\n", "EQUIPMENT", nequipment, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# EID, LID, ENAME\n");
   for(i=0; i<nequipment; i++){
     assert(lid == equipment[i].lid);
-    fprintf(fp, "%d|%d|%s\n", equipment[i].eid, equipment[i].lid,
+    fprintf(fp, "%d|%d|%s\n",
+	    equipment[i].eid, equipment[i].lid,
 	    equipment[i].ename);
   }
   fclose(fp);
@@ -443,45 +874,86 @@ void unload(int lid)
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# PID, LID, PNAME\n");
   for(i=0; i<nprocedure; i++)
     fprintf(fp, "%d|%s\n", procedure[i].pid,
 	    procedure[i].pname);
   fclose(fp);
 
   /* unload OPERATIONLOG */
-  snprintf(fn, NBUF-1, "%s%05u.dat", "OPERATIONLOG", lid);
+  snprintf(fn, NBUF-1, "%s%06u.dat", "OPERATIONLOG", lid);
   printf("Unloading %s (%ld records) for lid=%u ...\n", "OPERATIONLOG", noperationlog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# OLID, LID, WID, EID, PID, TSBEGIN, TSEND, COMMENT\n");
   for(i=0; i<noperationlog; i++){
     assert(lid == operationlog[i].lid);
-    t1 = TS_BASE + operationlog[i].ts_begin;
+    t1 = TSBASE + operationlog[i].tsbegin;
     strftime(dt1, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t1));
-    t2 = TS_BASE + operationlog[i].ts_end;
+    t2 = TSBASE + operationlog[i].tsend;
     strftime(dt2, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t2));
-    fprintf(fp, "%ld|%d|%d|%d|%d|%s|%s\n", operationlog[i].olid, operationlog[i].lid,
+    generate_olcomment(cmnt, NBUF-1, operationlog[i].olid, operationlog[i].lid);
+    fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03d|%s.%03d|%s\n",
+	    operationlog[i].olid, operationlog[i].lid,
 	    operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
-	    dt1, dt2);
+	    dt1, (int)(operationlog[i].tsbegin * 1000) % 1000,
+	    dt2, (int)(operationlog[i].tsend   * 1000) % 1000,
+	    cmnt);
   }
   fclose(fp);
 
   /* unload MATERIALLOG */
-  snprintf(fn, NBUF-1, "%s%05u.dat", "MATERIALLOG", lid);
+  snprintf(fn, NBUF-1, "%s%06u.dat", "MATERIALLOG", lid);
   printf("Unloading %s (%ld records) for lid=%u ...\n", "MATERIALLOG", nmateriallog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# MLID, LID, MTYPE, OLID_SRC, OLID_DST, SERIAL, WEIGHT, DIMENSIONX, DIMENSIONY, DIMENSIONZ, SHAPESOCRE, TEMPERATURE, COMMENT\n");
   for(i=0; i<nmateriallog; i++){
     assert(lid == materiallog[i].lid);
-    /*
-    fprintf(fp, "%ld|%d|%d|%d|%d\n", materiallog[i].mlid, materiallog[i].lid,
-	    materiallog[i].mtype, materiallog[i].olid_src, materiallog[i].olid_dst);
-    */
-    fprintf(fp, "%ld|%d|%s|%d|%d\n", materiallog[i].mlid, materiallog[i].lid,
-	    mtypename[materiallog[i].mtype], materiallog[i].olid_src, materiallog[i].olid_dst);
+    generate_mlcomment(cmnt, NBUF-1, materiallog[i].mlid, materiallog[i].lid);
+    fprintf(fp, "%ld|%d|%s|%d|%d|D%06d-L%06d-M%010ld|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%s\n",
+	    materiallog[i].mlid, materiallog[i].lid,
+	    mtypename[materiallog[i].mtype],
+	    materiallog[i].olid_src,
+	    materiallog[i].olid_dst,
+	    0, materiallog[i].lid, materiallog[i].mlid,
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_WGHT,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMX,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMY,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMZ,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_SHPS,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_TEMP,
+				     materiallog[i].mlid, materiallog[i].lid),
+	    cmnt);
+  }
+  fclose(fp);
+
+  /* unload EQUIPMENTLOG */
+  snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENTLOG", lid);
+  printf("Unloading %s (%ld records) for lid=%u ...\n", "EQUIPMENTLOG", nequipmentlog, lid);
+  if((fp = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp, "# %s\n", fn);
+  fprintf(fp, "# MLID, LID, MTYPE, OLID_SRC, OLID_DST, SERIAL, WEIGHT, DIMENSIONX, DIMENSIONY, DIMENSIONZ, SHAPESOCRE, TEMPERATURE, COMMENT\n");
+  for(i=0; i<nequipmentlog; i++){
+    assert(lid == equipmentlog[i].lid);
+    t1 = TSBASE + equipmentlog[i].ts;
+    strftime(dt1, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t1));
+    fprintf(fp, "%ld|%d|%d|%s|%s|%d\n",
+	    equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
+	    dt1,
+	    esensormodel[equipmentlog[i].esensor].sensorname,
+	    equipmentlog[i].ereading);
   }
   fclose(fp);
 }
