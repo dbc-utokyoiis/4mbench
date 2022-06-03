@@ -895,11 +895,11 @@ void unload(int lid)
     t2 = TSBASE + operationlog[i].tsend;
     strftime(dt2, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t2));
     generate_olcomment(cmnt, NBUF-1, operationlog[i].olid, operationlog[i].lid);
-    fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03d|%s.%03d|%s\n",
+    fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03d|%s.%03u|%s\n",
 	    operationlog[i].olid, operationlog[i].lid,
 	    operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
-	    dt1, (int)(operationlog[i].tsbegin * 1000) % 1000,
-	    dt2, (int)(operationlog[i].tsend   * 1000) % 1000,
+	    dt1, (unsigned int)(operationlog[i].tsbegin * 1000) % 1000,
+	    dt2, (unsigned int)(operationlog[i].tsend   * 1000) % 1000,
 	    cmnt);
   }
   fclose(fp);
