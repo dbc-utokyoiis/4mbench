@@ -728,7 +728,7 @@ void sim_equipmentlog(int lid,
 
 int nm0max = 0, nm[NPROCEDURE];
 
-void sim(int lid, int iday, int nmax)
+void sim(int lid, int iday, int pmax)
 {
   int i, j;
   double ts;
@@ -750,7 +750,7 @@ void sim(int lid, int iday, int nmax)
   for(i=0;i<NPROCEDURE;i++){
     nm0max *= nmaterial_to_pack[i];
   }
-  nm0max *= nmax;
+  nm0max *= pmax;
   
   /*
    * #0 (PROCEDURE00000) takes MT00
@@ -766,11 +766,12 @@ void sim(int lid, int iday, int nmax)
 	     lid, iday, pid);
       break;
     }
-    if(nm[pid] >= nm0max){
-      printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated total production amount.\n",
-	     lid, iday, pid);
-      break;
-    }
+    if(nm0max)
+      if(nm[pid] >= nm0max){
+	printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated total production amount.\n",
+	       lid, iday, pid);
+	break;
+      }
     olid_src = -1;
     olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
     mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
@@ -980,7 +981,7 @@ void unload(int lid)
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# MLID, LID, MTYPE, OLID_SRC, OLID_DST, SERIAL, WEIGHT, DIMENSIONX, DIMENSIONY, DIMENSIONZ, SHAPESOCRE, TEMPERATURE, COMMENT\n");
+  fprintf(fp, "# ELID, LID, EID, TS, ESENSOR, EREADING\n");
   for(i=0; i<nequipmentlog; i++){
     assert(lid == equipmentlog[i].lid);
     t1 = TSBASE + equipmentlog[i].ts;
@@ -1028,8 +1029,9 @@ Description:\n\
 Options:\n\
   -l <n> : specify LID (production line id) (range: 0 to 999999) (default: 0)\n\
   -d <n> : specify the number of simulation days (range: 1 to 1000) (default: 1)\n\
-  -n <n> : specify the maximim total number of final products to be produced (for testing)\n \
-  -M     : enable millisecond-scale dataaset generation (default: second-scale)\n\
+  -n <n> : limit the maximim total number of final products to be produced (FOR DEBUGGING)\n\
+           (default: disabled)\n\
+  -M     : enable millisecond-scale dataset generation (default: second-scale)\n\
   -v     : increase verbose levels\n\
 ");
 }
@@ -1038,14 +1040,13 @@ int main(int argc, char **argv)
 {
   int opt;
   int i;
-  int lid = 0; /* line id */
-  // int ni = NITERATION;          /* number of iterations */
-  int nday = 1; /* number of simulation days */
-  int nmax = NPACKAGE_TO_PRODUCE; /* package number to produce */
+  int lid = 0;
+  int nday = 1;
+  int pmax = 0;
   
   /* process command options */
   while(1){
-    if((opt = getopt(argc, argv, "l:d:n:M")) == EOF)
+    if((opt = getopt(argc, argv, "l:d:n:hMv")) == EOF)
       break;
     switch(opt){
     case 'l':
@@ -1055,7 +1056,11 @@ int main(int argc, char **argv)
       nday = atoi(optarg);
       break;
     case 'n':
-      nmax = atoi(optarg);
+      pmax = atoi(optarg);
+      break;
+    case 'h':
+      print_usage();
+      exit(EXIT_SUCCESS);
       break;
     case 'M':
       is_millisecond = 1;
@@ -1076,7 +1081,7 @@ int main(int argc, char **argv)
   /* conduct simulation */
   init(lid);
   for(i=0; i<nday; i++)
-    sim(lid, i, nmax);
+    sim(lid, i, pmax);
   unload(lid);
   fin(lid);
 
