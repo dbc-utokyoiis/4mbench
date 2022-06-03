@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <errno.h>
 #include <assert.h>
 #include <time.h>
@@ -294,15 +295,15 @@ struct equipmentlog_t *equipmentlog;
 long nequipmentlog = 0;
 int esensors[NEQUIPMENT][2] =
   {
-   {0, 9}, /* 0 */
-   {1, 9}, /* 1 */
-   {2, 9}, /* 2 */
-   {3, 9}, /* 3 */
-   {4, 9}, /* 4 */
-   {5, 9}, /* 5 */
-   {6, 9}, /* 6 */
-   {7, 9}, /* 7 */
-   {8, 9}, /* 8 */
+   {0, 9},  /* 0 */
+   {1, 10}, /* 1 */
+   {2, 11}, /* 2 */
+   {3, 12}, /* 3 */
+   {4, 13}, /* 4 */
+   {5, 14}, /* 5 */
+   {6, 15}, /* 6 */
+   {7, 16}, /* 7 */
+   {8, 17}, /* 8 */
   };
 
 struct esensormodel_t {
@@ -311,7 +312,7 @@ struct esensormodel_t {
   double median;
   double errorrange;
 };
-struct esensormodel_t esensormodel[NEQUIPMENT + 1] =
+struct esensormodel_t esensormodel[NEQUIPMENT * 2] =
   {
    {"PRESSURE",    MODELTYPE_FULLNDIST, 125.0, 15.0},  /* 0 */
    {"TEMPERATURE", MODELTYPE_FULLNDIST, 180.0, 2.0},   /* 1 */
@@ -322,7 +323,15 @@ struct esensormodel_t esensormodel[NEQUIPMENT + 1] =
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 6 */
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 7 */
    {"TEMPERATURE", MODELTYPE_FULLNDIST, 20.0,  15.0},  /* 8 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02}   /* 9 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 9 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 10 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 11 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 12 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 13 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 14 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 15 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 16 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02}   /* 17 */
   };
 #define ESENSOR_ERRORSCALE 5
 
@@ -423,7 +432,7 @@ void init_operationoutput(void)
 {
   int i;
   for(i=0; i<NPROCEDURE; i++)
-    if((operationoutput[i] = malloc(sizeof(struct operationoutput_t) * NMATERIALLOG)) == NULL){
+    if((operationoutput[i] = (struct operationoutput_t *)malloc(sizeof(struct operationoutput_t) * NMATERIALLOG)) == NULL){
       perror("malloc");
       exit(EXIT_FAILURE);
     }
@@ -637,6 +646,47 @@ long put_equipmentlog(int lid,
 }
 
 /*
+ * equipment status index
+ */
+
+int *equipmentstatusindex[NEQUIPMENT];
+#define NEQUIPMENTSTATUSINDEX (3600 * 24 * NDAY_MAX / 32)
+
+void init_equipmentstatusindex(void)
+{
+  int i;
+  for(i=0; i<NEQUIPMENT; i++){
+    if((equipmentstatusindex[i] = (int *)malloc(sizeof(int) * NEQUIPMENTSTATUSINDEX)) == NULL){
+      perror("malloc");
+      exit(EXIT_FAILURE);
+    }
+    memset(equipmentstatusindex[i], 0, sizeof(int) * NEQUIPMENTSTATUSINDEX);
+  }
+}
+
+void fin_equipmentstatusindex(void)
+{
+  int i;
+  for(i=0; i<NEQUIPMENT; i++)
+    free(equipmentstatusindex[i]);
+}
+
+
+void set_equipmentstatusindex(int eid, int t)
+{
+  t += EQUIPMENTSTANDBYTIME;
+  if(t / 32 >= NEQUIPMENTSTATUSINDEX){ fprintf(stderr, "Overflow (equipmentstatusindex)\n"); exit(EXIT_FAILURE); }
+  equipmentstatusindex[eid][t / 32] = equipmentstatusindex[eid][t / 32] | (1 << (t % 32));
+}
+
+int get_equipmentstatusindex(int eid, int t)
+{
+  t += EQUIPMENTSTANDBYTIME;
+  if(t / 32 >= NEQUIPMENTSTATUSINDEX){ fprintf(stderr, "Overflow (equipmentstatusindex)\n"); exit(EXIT_FAILURE); }
+  return((equipmentstatusindex[eid][t / 32] >> (t % 32)) & 1);
+}
+
+/*
  * Initialize
  */
 
@@ -692,6 +742,7 @@ void init(int lid)
   }
 
   init_operationoutput();
+  init_equipmentstatusindex();
 }
 
 /*
@@ -702,6 +753,8 @@ int worker_pid_iday(int pid, int iday)
 {
   return((pid + iday) % NWORKER);
 }
+
+double ts_max_equipmentlog = 0.0;
 
 void sim_equipmentlog(int lid,
 		      int iday,
@@ -718,20 +771,20 @@ void sim_equipmentlog(int lid,
   else    
     t = equipmentlog[nequipmentlog-1].ts;
   
+  /* printf("sim_equipmentlog[%u:%u]: %ld-%ld\n", lid, iday, t, t_latest); */
+  
   for(; t <= t_latest; t++){
     for(i = 0; i < NEQUIPMENT; i++){
-      put_equipmentlog(lid,
-		       i,
-		       (double)t,
-		       i,
-		       generate_esensor_reading(esensors[i][0], t, lid));
-      put_equipmentlog(lid,
-		       i,
-		       (double)t,
-		       NEQUIPMENT,
-		       generate_esensor_reading(esensors[i][1], t, lid));
+      int r1, r2;
+      r1 = generate_esensor_reading(esensors[i][0], t, lid);
+      r2 = generate_esensor_reading(esensors[i][1], t, lid);
+      put_equipmentlog(lid, i, (double)t, esensors[i][0], r1);
+      put_equipmentlog(lid, i, (double)t, esensors[i][1], r2);
+      if(r2){ set_equipmentstatusindex(i, t); }
     }
   }
+
+  ts_max_equipmentlog = (double)t_latest;
 }
 
 int nm0max = 0, nm[NPROCEDURE];
@@ -739,14 +792,15 @@ int nm0max = 0, nm[NPROCEDURE];
 void sim(int lid, int iday, int pmax)
 {
   int i, j;
-  double ts;
+  double ts, ts_overhead;
+  long t;
   long olid_src, olid_dst, mlid = 0;
   struct operationoutput_t *p;
   int wid, eid, pid, mtype;
   double ts_max = 0.0, ts_day_start = 0.0;
   int nm_day[NPROCEDURE];
   
-  printf("Generating %s for LID=%u ...\n", "OPERATIONLOG and MATERIALLOG", lid);
+  printf("Generating %s for LID=%u ...\n", "OPERATIONLOG, MATERIALLOG and EQUIPMENTLOG", lid);
 
   /* Arrange timestamps */
   
@@ -779,6 +833,11 @@ void sim(int lid, int iday, int pmax)
 	       lid, iday, pid);
 	break;
       }
+    if(ts + processinglatency[pid] >= ts_max_equipmentlog)
+      sim_equipmentlog(lid, iday, ts + processinglatency[pid]);
+    ts_overhead = 0.0;
+    for(t = (long)ts; t <= (long)ts + processinglatency[pid]; t++)
+      if(!get_equipmentstatusindex(eid, t)){ ts_overhead += 1.0; }
     olid_src = -1;
     olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
     mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
@@ -787,9 +846,9 @@ void sim(int lid, int iday, int pmax)
       /* Only qualified materials go to the next step */
       put_operationoutput(mlid, olid_dst,
 			  lid, wid, eid, pid,
-			  ts + processinglatency[pid]);
-    ts += processinglatency[pid];
-    if(ts > ts_max){ ts_max = ts; }
+			  ts + processinglatency[pid] + ts_overhead);
+    if(ts + processinglatency[pid] + ts_overhead > ts_max){ ts_max = ts + processinglatency[pid] + ts_overhead; }
+    ts += processinglatency[pid] + ts_overhead;
   } /* for(i) */
   printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
 	 lid, iday, pid, nm_day[pid], nm[pid]);
@@ -817,14 +876,17 @@ void sim(int lid, int iday, int pmax)
       for(j=0; j<nmaterial_to_append[pid]; j++){
 	mlid = put_materiallog(lid, mtype + 10, -1, olid_dst);
       }
-      update_operationlog_ts(olid_dst, ts, ts + processinglatency[pid]);
+      ts_overhead = 0.0;
+      for(t = (long)ts; t <= (long)ts + processinglatency[pid]; t++)
+	if(!get_equipmentstatusindex(eid, t)){ ts_overhead += 1.0; }
+      update_operationlog_ts(olid_dst, ts, ts + processinglatency[pid] + ts_overhead);
       nm[pid]++; nm_day[pid]++;
       if(((double)rand() / (RAND_MAX + 1.0)) >= errorrate[pid])
 	/* Only qualified materials go to the next step */
 	put_operationoutput(mlid, olid_dst,
 			    lid, wid, eid, pid,
-			    ts + processinglatency[pid]);
-      if(ts > ts + processinglatency[pid]){ ts_max = ts + processinglatency[pid]; }
+			    ts + processinglatency[pid] + ts_overhead);
+      if(ts + processinglatency[pid] + ts_overhead > ts_max){ ts_max = ts + processinglatency[pid] + ts_overhead; }
     } /* while(1) */
     printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
 	   lid, iday, pid, nm_day[pid], nm[pid]);
@@ -849,8 +911,6 @@ void sim(int lid, int iday, int pmax)
       mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
     }
   } /* while(1) */
-
-  printf("Generating %s for LID=%u ...\n", "EQUIPMENTLOG", lid);
 
   sim_equipmentlog(lid, iday, ts_max);
 }
@@ -1013,6 +1073,7 @@ void unload(int lid)
 
 void fin(int lid)
 {
+  fin_equipmentstatusindex();
   fin_operationoutput();
 
   printf("Releasing %s for LID=%u ...\n", "MATERIALLOG", lid);
