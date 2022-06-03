@@ -22,6 +22,8 @@
 #define NPACKAGE_TO_PRODUCE 100
 #define NITERATION 1
 
+int is_millisecond = 0;
+
 struct worker_t {
   int wid;          /* worker id */
   int lid;          /* line id */
@@ -895,12 +897,21 @@ void unload(int lid)
     t2 = TSBASE + operationlog[i].tsend;
     strftime(dt2, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t2));
     generate_olcomment(cmnt, NBUF-1, operationlog[i].olid, operationlog[i].lid);
-    fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03d|%s.%03u|%s\n",
-	    operationlog[i].olid, operationlog[i].lid,
-	    operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
-	    dt1, (unsigned int)(operationlog[i].tsbegin * 1000) % 1000,
-	    dt2, (unsigned int)(operationlog[i].tsend   * 1000) % 1000,
-	    cmnt);
+    if(is_millisecond)
+      fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03u|%s.%03u|%s\n",
+	      operationlog[i].olid, operationlog[i].lid,
+	      operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
+	      dt1, (unsigned int)(operationlog[i].tsbegin * 1000) % 1000,
+	      dt2, (unsigned int)(operationlog[i].tsend   * 1000) % 1000,
+	      cmnt);
+    else
+      fprintf(fp, "%ld|%d|%d|%d|%d|%s|%s|%s\n",
+	      operationlog[i].olid, operationlog[i].lid,
+	      operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
+	      dt1,
+	      dt2,
+	      cmnt);
+      
   }
   fclose(fp);
 
@@ -949,11 +960,18 @@ void unload(int lid)
     assert(lid == equipmentlog[i].lid);
     t1 = TSBASE + equipmentlog[i].ts;
     strftime(dt1, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t1));
-    fprintf(fp, "%ld|%d|%d|%s|%s|%d\n",
-	    equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
-	    dt1,
-	    esensormodel[equipmentlog[i].esensor].sensorname,
-	    equipmentlog[i].ereading);
+    if(is_millisecond)
+      fprintf(fp, "%ld|%d|%d|%s.%03u|%s|%d\n",
+	      equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
+	      dt1, 0,
+	      esensormodel[equipmentlog[i].esensor].sensorname,
+	      equipmentlog[i].ereading);
+    else
+      fprintf(fp, "%ld|%d|%d|%s|%s|%d\n",
+	      equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
+	      dt1,
+	      esensormodel[equipmentlog[i].esensor].sensorname,
+	      equipmentlog[i].ereading);      
   }
   fclose(fp);
 }
@@ -976,6 +994,20 @@ void fin(int lid)
  * Main
  */
 
+void print_usage(void)
+{
+  puts("\
+Usage: dgen [options]\n\
+Description:\n\
+  The 4mbench dataset generator\n\
+Options:\n\
+  -l <n> : specify LID (line id) (range: 0 to 999999) (default: 0)\n\
+  -d <n> : specify the number of simulation days (range: 1 to 1000) (default: 1)\n\
+  -n <n> : specify the maximim number of final products to be produced\n\
+  -M     : enable millisecond-scale dataaset generation (default: second-scale)\n\
+");
+}
+
 int main(int argc, char **argv)
 {
   int opt;
@@ -986,7 +1018,7 @@ int main(int argc, char **argv)
   
   /* process command options */
   while(1){
-    if((opt = getopt(argc, argv, "l:p:i:")) == EOF)
+    if((opt = getopt(argc, argv, "l:p:i:M")) == EOF)
       break;
     switch(opt){
     case 'l':
@@ -997,6 +1029,14 @@ int main(int argc, char **argv)
       break;
     case 'i':
       ni = atoi(optarg);
+      break;
+    case 'M':
+      is_millisecond = 1;
+      ni = atoi(optarg);
+      break;
+    default:
+      print_usage();
+      exit(EXIT_FAILURE);
       break;
     }
   }
