@@ -23,6 +23,11 @@
 #define BUSINESSHOURS 8
 #define NPACKAGE_TO_PRODUCE 100
 
+#define LID_MIN 0
+#define LID_MAX 999999
+#define NDAY_MIN 1
+#define NDAY_MAX 1000
+
 int is_millisecond = 0;
 int verbose = 0;
 
@@ -360,7 +365,7 @@ long put_operationlog(int lid,
 		      int wid, int eid, int pid,
 		      double tsbegin, double tsend)
 {  
-  if(noperationlog >= NOPERATIONLOG){ fprintf(stderr, "overflow (operationlog)\n"); exit(EXIT_FAILURE); }
+  if(noperationlog >= NOPERATIONLOG){ fprintf(stderr, "Overflow (operationlog)\n"); exit(EXIT_FAILURE); }
   
   operationlog[noperationlog].olid = noperationlog;
   operationlog[noperationlog].lid = lid;
@@ -376,7 +381,7 @@ long put_operationlog(int lid,
 void update_operationlog_ts(long olid,
 			    double tsbegin, double tsend)
 {
-  if(olid != operationlog[olid].olid){ fprintf(stderr, "overflow (operationlog)\n");  exit(EXIT_FAILURE); }
+  if(olid != operationlog[olid].olid){ fprintf(stderr, "Overflow (operationlog)\n");  exit(EXIT_FAILURE); }
 
   operationlog[olid].tsbegin = tsbegin;
   operationlog[olid].tsend = tsend;
@@ -385,7 +390,7 @@ void update_operationlog_ts(long olid,
 long put_materiallog(int lid,
 		     int mtype, long olid_src, long olid_dst)
 {
-  if(nmateriallog >= NMATERIALLOG){ fprintf(stderr, "overflow (materiallog)\n");  exit(EXIT_FAILURE); }
+  if(nmateriallog >= NMATERIALLOG){ fprintf(stderr, "Overflow (materiallog)\n");  exit(EXIT_FAILURE); }
 
   materiallog[nmateriallog].mlid = nmateriallog;
   materiallog[nmateriallog].lid = lid;
@@ -435,7 +440,7 @@ void put_operationoutput(long mlid, long olid,
 			 int lid, int wid, int eid, int pid,
 			 double ts)
 {
-  if(operationoutput_to_put[pid] >= NMATERIALLOG){ fprintf(stderr, "overflow (operationoutput)");  exit(EXIT_FAILURE); }
+  if(operationoutput_to_put[pid] >= NMATERIALLOG){ fprintf(stderr, "Overflow (operationoutput)");  exit(EXIT_FAILURE); }
   
   operationoutput[pid][operationoutput_to_put[pid]].mlid = mlid;
   operationoutput[pid][operationoutput_to_put[pid]].olid = olid;
@@ -454,7 +459,7 @@ long get_navailable(int pid)
 
 struct operationoutput_t *get_operationoutput(int pid)
 {
-  if(operationoutput_to_get[pid] >= NMATERIALLOG){ fprintf(stderr, "overflow (operationoutput)");  exit(EXIT_FAILURE); }
+  if(operationoutput_to_get[pid] >= NMATERIALLOG){ fprintf(stderr, "Overflow (operationoutput)");  exit(EXIT_FAILURE); }
   if(operationoutput_to_get[pid] >= operationoutput_to_put[pid]){ return(NULL); }
   struct operationoutput_t *p = &operationoutput[pid][operationoutput_to_get[pid]];
   operationoutput_to_get[pid]++;
@@ -619,7 +624,7 @@ long put_equipmentlog(int lid,
 		      double ts,
 		      int esensor, int ereading)
 {  
-  if(nequipmentlog >= NEQUIPMENTLOG){ fprintf(stderr, "overflow (equipmentlog)\n"); exit(EXIT_FAILURE); }
+  if(nequipmentlog >= NEQUIPMENTLOG){ fprintf(stderr, "Overflow (equipmentlog)\n"); exit(EXIT_FAILURE); }
   
   equipmentlog[nequipmentlog].elid = nequipmentlog;
   equipmentlog[nequipmentlog].lid = lid;
@@ -693,8 +698,6 @@ void init(int lid)
  * Simulate to generate OPERATIONLOG and MATERIALLOG
  */
 
-double tsbackup = 0.0;
-
 void sim_equipmentlog(int lid,
 		      int iday,
 		      double ts_latest)
@@ -744,7 +747,7 @@ void sim(int lid, int iday, int pmax)
   
   ts_day_start = iday * 3600 * 24;
   
-  /* Calculate maximum production amount */
+  /* Calculate maximum production amounts roughly */
 
   nm0max = 1;
   for(i=0;i<NPROCEDURE;i++){
@@ -756,7 +759,6 @@ void sim(int lid, int iday, int pmax)
    * #0 (PROCEDURE00000) takes MT00
    */
 
-  // ts = tsbackup;
   ts = ts_day_start;
   wid = 0, eid = 0, pid = 0, mtype = 0;
   nm_day[pid] = 0;
@@ -784,7 +786,6 @@ void sim(int lid, int iday, int pmax)
     ts += processinglatency[pid];
     if(ts > ts_max){ ts_max = ts; }
   } /* for(i) */
-  tsbackup = ts;
   printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
 	 lid, iday, pid, nm_day[pid], nm[pid]);
   
@@ -801,7 +802,7 @@ void sim(int lid, int iday, int pmax)
       olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
       for(j=0; j<nmaterial_to_pack[pid]; j++){
 	if((p = get_operationoutput(pid - 1)) == NULL){
-	  fprintf(stderr, "oprationlog broken (pid=%d).\n", pid);
+	  fprintf(stderr, "Oprationlog broken (pid=%d).\n", pid);
 	  exit(EXIT_FAILURE);
 	}
 	olid_src = p->olid;
@@ -836,14 +837,13 @@ void sim(int lid, int iday, int pmax)
     olid_dst = -1;
     for(j=0; j<1; j++){
       if((p = get_operationoutput(pid - 1)) == NULL){
-	fprintf(stderr, "oprationlog broken (pid=%d).\n", pid);
+	fprintf(stderr, "Oprationlog broken (pid=%d).\n", pid);
 	exit(EXIT_FAILURE);
       }
       olid_src = p->olid;
       mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
     }
   } /* while(1) */
-
 
   printf("Generating %s for LID=%u ...\n", "EQUIPMENTLOG", lid);
 
@@ -1022,18 +1022,19 @@ void fin(int lid)
 
 void print_usage(void)
 {
-  puts("\
+  printf("\
 Usage: dgen [options]\n\
 Description:\n\
   The 4mbench dataset generator\n\
 Options:\n\
-  -l <n> : specify LID (production line id) (range: 0 to 999999) (default: 0)\n\
-  -d <n> : specify the number of simulation days (range: 1 to 1000) (default: 1)\n\
+  -l <n> : specify LID (production line id) (range: %u to %u) (default: 0)\n\
+  -d <n> : specify the number of simulation days (range: %u to %u) (default: 1)\n\
   -n <n> : limit the maximim total number of final products to be produced (FOR DEBUGGING)\n\
            (default: disabled)\n\
   -M     : enable millisecond-scale dataset generation (default: second-scale)\n\
-  -v     : increase verbose levels\n\
-");
+  -v     : increase verbose levels\n",
+	 LID_MIN, LID_MAX,
+	 NDAY_MIN, NDAY_MAX);
 }
 
 int main(int argc, char **argv)
@@ -1075,6 +1076,17 @@ int main(int argc, char **argv)
     }
   }
 
+  if(lid < LID_MIN || lid > LID_MAX){
+    fprintf(stderr, "Parameter (LID) is out of range.\n");
+    print_usage();
+    exit(EXIT_FAILURE);
+  }
+  if(nday < NDAY_MIN || nday > NDAY_MAX){
+    fprintf(stderr, "Parameter (number of days) is out of range.\n");
+    print_usage();
+    exit(EXIT_FAILURE);
+  }
+  
   /* set random seed */
   srand(lid);
   
