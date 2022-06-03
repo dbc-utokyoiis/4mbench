@@ -36,7 +36,7 @@ struct worker_t {
   int lid;          /* line id */
   char wname[NBUF]; /* workername */
 };
-#define NWORKER 9
+#define NWORKER (9+4)
 struct worker_t worker[NWORKER];
 int nworker = 0;
 
@@ -698,6 +698,11 @@ void init(int lid)
  * Simulate to generate OPERATIONLOG and MATERIALLOG
  */
 
+int worker_pid_iday(int pid, int iday)
+{
+  return((pid + iday) % NWORKER);
+}
+
 void sim_equipmentlog(int lid,
 		      int iday,
 		      double ts_latest)
@@ -760,7 +765,7 @@ void sim(int lid, int iday, int pmax)
    */
 
   ts = ts_day_start;
-  wid = 0, eid = 0, pid = 0, mtype = 0;
+  wid = worker_pid_iday(0, iday); eid = 0; pid = 0; mtype = 0;
   nm_day[pid] = 0;
   while(1){
     if(ts > ts_day_start + 3600 * BUSINESSHOURS){
@@ -795,7 +800,7 @@ void sim(int lid, int iday, int pmax)
   
   for(i=1;i<NPROCEDURE;i++){
     ts = ts_day_start;
-    wid = i, eid = i, pid = i, mtype = i;
+    wid = worker_pid_iday(i, iday); eid = i; pid = i; mtype = i;
     nm_day[pid] = 0;
     while(1){
       if(get_navailable(pid - 1) < nmaterial_to_pack[pid]){ break; }
@@ -831,7 +836,7 @@ void sim(int lid, int iday, int pmax)
 
   i=NPROCEDURE;
   ts = ts_day_start;
-  wid = i, eid = i, pid = i, mtype = i;
+  wid = worker_pid_iday(i, iday); eid = i, pid = i, mtype = i;
   while(1){
     if(get_navailable(pid - 1) < 1){ break; }
     olid_dst = -1;
