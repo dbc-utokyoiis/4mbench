@@ -17,12 +17,14 @@
  */
 
 #define NBUF 512
+
 #define TSBASE 1648771200 /* 2022-04-01 09:00:00 at Tokyo */
-#define TSEQUIPMENTWARMUP (30*60)
+#define EQUIPMENTSTANDBYTIME (30*60)
+#define BUSINESSHOURS 8
 #define NPACKAGE_TO_PRODUCE 100
-#define NITERATION 1
 
 int is_millisecond = 0;
+int verbose = 0;
 
 struct worker_t {
   int wid;          /* worker id */
@@ -138,13 +140,13 @@ double processinglatency[NPROCEDURE] =
 
 double errorrate[NPROCEDURE] =
   {
-   0.001,
+   0, //0.001,
    0.0,
    0.0,
    0.0,
-   0.001,
+   0, //0.001,
    0.0,
-   0.001,
+   0, //0.001,
    0.0,
    0.0
   };
@@ -284,7 +286,7 @@ struct equipmentlog_t {
 };
 #define NEQUIPMENTLOG (3600 * 2 * 1024)
 struct equipmentlog_t *equipmentlog;
-long nequipmentlog /* = 0 */;
+long nequipmentlog = 0;
 int esensors[NEQUIPMENT][2] =
   {
    {0, 9}, /* 0 */
@@ -312,7 +314,7 @@ struct esensormodel_t esensormodel[NEQUIPMENT + 1] =
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 3 */
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 4 */
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 5 */
-   {"INK LEFT",    MODELTYPE_FULLNDIST, 55.0,  45.0},  /* 6 */
+   {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 6 */
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 7 */
    {"TEMPERATURE", MODELTYPE_FULLNDIST, 20.0,  15.0},  /* 8 */
    {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02}   /* 9 */
@@ -638,7 +640,7 @@ void init(int lid)
   int i;
 
   /* generate WORKER */
-  printf("Generating %s for lid=%u ...\n", "WORKER", lid);
+  printf("Generating %s for LID=%u ...\n", "WORKER", lid);
   nworker = NWORKER;
   for(i=0; i<NWORKER; i++){
     worker[i].wid = i;
@@ -647,7 +649,7 @@ void init(int lid)
   }
 
   /* generate EQUIPMENT */
-  printf("Generating %s for lid=%u ...\n", "EQUIPMENT", lid);
+  printf("Generating %s for LID=%u ...\n", "EQUIPMENT", lid);
   nequipment = NEQUIPMENT;
   for(i=0; i<nequipment; i++){
     equipment[i].eid = i;
@@ -656,7 +658,7 @@ void init(int lid)
   }
 
   /* generate PROCEDURE */
-  printf("Generating %s for lid=%u ...\n", "PROCEDURE", lid);
+  printf("Generating %s for LID=%u ...\n", "PROCEDURE", lid);
   nprocedure = NPROCEDURE;
   for(i=0; i<nprocedure; i++){
     procedure[i].pid = i;
@@ -664,21 +666,21 @@ void init(int lid)
   }
 
   /* allocate OPERATIONLOG */
-  printf("Allocating %s for lid=%u ...\n", "OPERATIONLOG", lid);
+  printf("Allocating %s for LID=%u ...\n", "OPERATIONLOG", lid);
   if((operationlog = malloc(sizeof(struct operationlog_t) * NOPERATIONLOG)) == NULL){
     perror("malloc");
     exit(EXIT_FAILURE);
   }
 
   /* allocate MATERIALLOG */
-  printf("Allocating %s for lid=%u ...\n", "MATERIALLOG", lid);
+  printf("Allocating %s for LID=%u ...\n", "MATERIALLOG", lid);
   if((materiallog = malloc(sizeof(struct materiallog_t) * NMATERIALLOG)) == NULL){
     perror("malloc");
     exit(EXIT_FAILURE);
   }
 
   /* allocate EQUIPMENTLOG */
-  printf("Allocating %s for lid=%u ...\n", "EQUIPMENTLOG", lid);
+  printf("Allocating %s for LID=%u ...\n", "EQUIPMENTLOG", lid);
   if((equipmentlog = malloc(sizeof(struct equipmentlog_t) * NEQUIPMENTLOG)) == NULL){
     perror("malloc");
     exit(EXIT_FAILURE);
@@ -694,21 +696,19 @@ void init(int lid)
 double tsbackup = 0.0;
 
 void sim_equipmentlog(int lid,
+		      int iday,
 		      double ts_latest)
 {
   int i;
   long t;
-  long t_latest = ts_latest + TSEQUIPMENTWARMUP;
+  long t_latest = ts_latest + EQUIPMENTSTANDBYTIME;
 
-  if(nequipmentlog)
+  if(nequipmentlog  == 0)
+    t = iday * 3600 * 24 - EQUIPMENTSTANDBYTIME;
+  else if((long)equipmentlog[nequipmentlog-1].ts / 3600 / 24 != t_latest / 3600 / 24)
+    t = iday * 3600 * 24 - EQUIPMENTSTANDBYTIME;
+  else    
     t = equipmentlog[nequipmentlog-1].ts;
-  else
-    t = -TSEQUIPMENTWARMUP;
-
-#if 0
-  printf("%ld\n", nequipmentlog);
-  printf("%ld - %ld\n", t, t_latest);
-#endif
   
   for(; t <= t_latest; t++){
     for(i = 0; i < NEQUIPMENT; i++){
@@ -716,46 +716,65 @@ void sim_equipmentlog(int lid,
 		       i,
 		       (double)t,
 		       i,
-		       generate_esensor_reading(i, t, lid));
+		       generate_esensor_reading(esensors[i][0], t, lid));
       put_equipmentlog(lid,
 		       i,
 		       (double)t,
 		       NEQUIPMENT,
-		       generate_esensor_reading(NEQUIPMENT, t, lid));
+		       generate_esensor_reading(esensors[i][1], t, lid));
     }
   }
 }
 
-void sim(int lid, int np)
+int nm0max = 0, nm[NPROCEDURE];
+
+void sim(int lid, int iday, int nmax)
 {
   int i, j;
   double ts;
   long olid_src, olid_dst, mlid = 0;
   struct operationoutput_t *p;
   int wid, eid, pid, mtype;
-  int n;
-  double ts_max = 0.0;
+  double ts_max = 0.0, ts_day_start = 0.0;
+  int nm_day[NPROCEDURE];
   
-  printf("Generating %s for lid=%u ...\n", "OPERATIONLOG and MATERIALLOG", lid);
+  printf("Generating %s for LID=%u ...\n", "OPERATIONLOG and MATERIALLOG", lid);
 
-  /* Calculate initial production amount */
+  /* Arrange timestamps */
+  
+  ts_day_start = iday * 3600 * 24;
+  
+  /* Calculate maximum production amount */
 
-  n = 1;
+  nm0max = 1;
   for(i=0;i<NPROCEDURE;i++){
-    n *= nmaterial_to_pack[i];
+    nm0max *= nmaterial_to_pack[i];
   }
-  n *= np;
-
+  nm0max *= nmax;
+  
   /*
    * #0 (PROCEDURE00000) takes MT00
    */
 
-  ts = tsbackup;
+  // ts = tsbackup;
+  ts = ts_day_start;
   wid = 0, eid = 0, pid = 0, mtype = 0;
-  for(i=0; i<n; i++){
+  nm_day[pid] = 0;
+  while(1){
+    if(ts > ts_day_start + 3600 * BUSINESSHOURS){
+      printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated business hours of day.\n",
+	     lid, iday, pid);
+      break;
+    }
+    if(nm[pid] >= nm0max){
+      printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated total production amount.\n",
+	     lid, iday, pid);
+      break;
+    }
     olid_src = -1;
     olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
     mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
+    nm[pid]++; nm_day[pid]++;
     if(((double)rand() / (RAND_MAX + 1.0)) >= errorrate[pid])
       /* Only qualified materials go to the next step */
       put_operationoutput(mlid, olid_dst,
@@ -765,20 +784,23 @@ void sim(int lid, int np)
     if(ts > ts_max){ ts_max = ts; }
   } /* for(i) */
   tsbackup = ts;
+  printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
+	 lid, iday, pid, nm_day[pid], nm[pid]);
   
   /*
    * #{1...9} (PROCEDURE{00001...00009}) takes MT{01...09}
    */
-
-  for(i=0;i<NPROCEDURE;i++){
+  
+  for(i=1;i<NPROCEDURE;i++){
+    ts = ts_day_start;
     wid = i, eid = i, pid = i, mtype = i;
-    ts = 0;
+    nm_day[pid] = 0;
     while(1){
       if(get_navailable(pid - 1) < nmaterial_to_pack[pid]){ break; }
       olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
       for(j=0; j<nmaterial_to_pack[pid]; j++){
 	if((p = get_operationoutput(pid - 1)) == NULL){
-	  fprintf(stderr, "oprationlog broken.\n");
+	  fprintf(stderr, "oprationlog broken (pid=%d).\n", pid);
 	  exit(EXIT_FAILURE);
 	}
 	olid_src = p->olid;
@@ -789,6 +811,7 @@ void sim(int lid, int np)
 	mlid = put_materiallog(lid, mtype + 10, -1, olid_dst);
       }
       update_operationlog_ts(olid_dst, ts, ts + processinglatency[pid]);
+      nm[pid]++; nm_day[pid]++;
       if(((double)rand() / (RAND_MAX + 1.0)) >= errorrate[pid])
 	/* Only qualified materials go to the next step */
 	put_operationoutput(mlid, olid_dst,
@@ -796,6 +819,8 @@ void sim(int lid, int np)
 			    ts + processinglatency[pid]);
       if(ts > ts + processinglatency[pid]){ ts_max = ts + processinglatency[pid]; }
     } /* while(1) */
+    printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
+	   lid, iday, pid, nm_day[pid], nm[pid]);
   } /* for(i) */
 
   /*
@@ -803,14 +828,14 @@ void sim(int lid, int np)
    */
 
   i=NPROCEDURE;
+  ts = ts_day_start;
   wid = i, eid = i, pid = i, mtype = i;
-  ts = 0;
   while(1){
     if(get_navailable(pid - 1) < 1){ break; }
     olid_dst = -1;
     for(j=0; j<1; j++){
       if((p = get_operationoutput(pid - 1)) == NULL){
-	fprintf(stderr, "oprationlog broken.\n");
+	fprintf(stderr, "oprationlog broken (pid=%d).\n", pid);
 	exit(EXIT_FAILURE);
       }
       olid_src = p->olid;
@@ -819,9 +844,9 @@ void sim(int lid, int np)
   } /* while(1) */
 
 
-  printf("Generating %s for lid=%u ...\n", "EQUIPMENTLOG", lid);
+  printf("Generating %s for LID=%u ...\n", "EQUIPMENTLOG", lid);
 
-  sim_equipmentlog(lid, ts_max);
+  sim_equipmentlog(lid, iday, ts_max);
 }
 
 /*
@@ -839,7 +864,7 @@ void unload(int lid)
   
   /* unload WORKER */
   snprintf(fn, NBUF-1, "%s%06u.dat", "WORKER", lid);
-  printf("Unloading %s (%d records) for lid=%u ...\n", "WORKER", nworker, lid);
+  printf("Unloading %s (%d records) for LID=%u ...\n", "WORKER", nworker, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
@@ -855,7 +880,7 @@ void unload(int lid)
 
   /* unload EQUIPMENT */
   snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENT", lid);
-  printf("Unloading %s (%d records) for lid=%u ...\n", "EQUIPMENT", nequipment, lid);
+  printf("Unloading %s (%d records) for LID=%u ...\n", "EQUIPMENT", nequipment, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
@@ -884,7 +909,7 @@ void unload(int lid)
 
   /* unload OPERATIONLOG */
   snprintf(fn, NBUF-1, "%s%06u.dat", "OPERATIONLOG", lid);
-  printf("Unloading %s (%ld records) for lid=%u ...\n", "OPERATIONLOG", noperationlog, lid);
+  printf("Unloading %s (%ld records) for LID=%u ...\n", "OPERATIONLOG", noperationlog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
@@ -917,7 +942,7 @@ void unload(int lid)
 
   /* unload MATERIALLOG */
   snprintf(fn, NBUF-1, "%s%06u.dat", "MATERIALLOG", lid);
-  printf("Unloading %s (%ld records) for lid=%u ...\n", "MATERIALLOG", nmateriallog, lid);
+  printf("Unloading %s (%ld records) for LID=%u ...\n", "MATERIALLOG", nmateriallog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
@@ -950,7 +975,7 @@ void unload(int lid)
 
   /* unload EQUIPMENTLOG */
   snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENTLOG", lid);
-  printf("Unloading %s (%ld records) for lid=%u ...\n", "EQUIPMENTLOG", nequipmentlog, lid);
+  printf("Unloading %s (%ld records) for LID=%u ...\n", "EQUIPMENTLOG", nequipmentlog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
   }
@@ -984,9 +1009,9 @@ void fin(int lid)
 {
   fin_operationoutput();
 
-  printf("Releasing %s for lid=%u ...\n", "MATERIALLOG", lid);
+  printf("Releasing %s for LID=%u ...\n", "MATERIALLOG", lid);
   free(materiallog);
-  printf("Releasing %s for lid=%u ...\n", "OPERATIONLOG", lid);
+  printf("Releasing %s for LID=%u ...\n", "OPERATIONLOG", lid);
   free(operationlog);
 }
 
@@ -1001,10 +1026,11 @@ Usage: dgen [options]\n\
 Description:\n\
   The 4mbench dataset generator\n\
 Options:\n\
-  -l <n> : specify LID (line id) (range: 0 to 999999) (default: 0)\n\
+  -l <n> : specify LID (production line id) (range: 0 to 999999) (default: 0)\n\
   -d <n> : specify the number of simulation days (range: 1 to 1000) (default: 1)\n\
-  -n <n> : specify the maximim number of final products to be produced\n\
+  -n <n> : specify the maximim total number of final products to be produced (for testing)\n \
   -M     : enable millisecond-scale dataaset generation (default: second-scale)\n\
+  -v     : increase verbose levels\n\
 ");
 }
 
@@ -1013,26 +1039,29 @@ int main(int argc, char **argv)
   int opt;
   int i;
   int lid = 0; /* line id */
-  int np = NPACKAGE_TO_PRODUCE; /* package number to produce */
-  int ni = NITERATION;          /* number of iterations */
+  // int ni = NITERATION;          /* number of iterations */
+  int nday = 1; /* number of simulation days */
+  int nmax = NPACKAGE_TO_PRODUCE; /* package number to produce */
   
   /* process command options */
   while(1){
-    if((opt = getopt(argc, argv, "l:p:i:M")) == EOF)
+    if((opt = getopt(argc, argv, "l:d:n:M")) == EOF)
       break;
     switch(opt){
     case 'l':
       lid = atoi(optarg);
       break;
-    case 'p':
-      np = atoi(optarg);
+    case 'd':
+      nday = atoi(optarg);
       break;
-    case 'i':
-      ni = atoi(optarg);
+    case 'n':
+      nmax = atoi(optarg);
       break;
     case 'M':
       is_millisecond = 1;
-      ni = atoi(optarg);
+      break;
+    case 'v':
+      verbose++;
       break;
     default:
       print_usage();
@@ -1046,8 +1075,8 @@ int main(int argc, char **argv)
   
   /* conduct simulation */
   init(lid);
-  for(i=0; i<ni; i++)
-    sim(lid, np);
+  for(i=0; i<nday; i++)
+    sim(lid, i, nmax);
   unload(lid);
   fin(lid);
 
