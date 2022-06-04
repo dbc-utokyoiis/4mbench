@@ -173,6 +173,7 @@ int nmaterial_to_pack[NPROCEDURE] =
 
 int nmaterial_to_append[NPROCEDURE] =
   {
+
    0,
    0,
    0,
@@ -462,15 +463,19 @@ void put_operationoutput(long mlid, long olid,
 			 int lid, int wid, int eid, int pid,
 			 double ts)
 {
-  if(operationoutput_to_put[pid] >= NMATERIALLOG){ fprintf(stderr, "Overflow (operationoutput)");  exit(EXIT_FAILURE); }
+  int idx = operationoutput_to_put[pid] % NOPERATIONLOG;
+  if(operationoutput_to_put[pid] >= operationoutput_to_get[pid] + NMATERIALLOG + 1){
+    fprintf(stderr, "Overflow (operationoutput)");
+    exit(EXIT_FAILURE);
+  }
   
-  operationoutput[pid][operationoutput_to_put[pid]].mlid = mlid;
-  operationoutput[pid][operationoutput_to_put[pid]].olid = olid;
-  operationoutput[pid][operationoutput_to_put[pid]].lid = lid;
-  operationoutput[pid][operationoutput_to_put[pid]].wid = wid;
-  operationoutput[pid][operationoutput_to_put[pid]].eid = eid;
-  operationoutput[pid][operationoutput_to_put[pid]].pid = pid;
-  operationoutput[pid][operationoutput_to_put[pid]].ts = ts;
+  operationoutput[pid][idx].mlid = mlid;
+  operationoutput[pid][idx].olid = olid;
+  operationoutput[pid][idx].lid = lid;
+  operationoutput[pid][idx].wid = wid;
+  operationoutput[pid][idx].eid = eid;
+  operationoutput[pid][idx].pid = pid;
+  operationoutput[pid][idx].ts = ts;
   operationoutput_to_put[pid]++;
 }
 
@@ -481,9 +486,12 @@ long get_navailable(int pid)
 
 struct operationoutput_t *get_operationoutput(int pid)
 {
-  if(operationoutput_to_get[pid] >= NMATERIALLOG){ fprintf(stderr, "Overflow (operationoutput)");  exit(EXIT_FAILURE); }
-  if(operationoutput_to_get[pid] >= operationoutput_to_put[pid]){ return(NULL); }
-  struct operationoutput_t *p = &operationoutput[pid][operationoutput_to_get[pid]];
+  int idx = operationoutput_to_get[pid] % NOPERATIONLOG;
+  if(operationoutput_to_get[pid] >= operationoutput_to_put[pid]){
+    return(NULL);
+  }
+  
+  struct operationoutput_t *p = &operationoutput[pid][idx];
   operationoutput_to_get[pid]++;
   return(p);
 }
