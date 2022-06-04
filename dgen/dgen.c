@@ -92,9 +92,9 @@ struct operationlog_t {
   double tsbegin;  /* timestamp in starting */
   double tsend;    /* timestamp in ending */
 };
-#define NOPERATIONLOG (1024 * 1024 * 100)
+#define NOPERATIONLOG (1024 * 1024 * 10)
 struct operationlog_t *operationlog;
-long noperationlog = 0;
+long noperationlog = 0, noperationlog_unload = 0;
 
 struct materiallog_t {
   long mlid;       /* material log id */
@@ -103,9 +103,9 @@ struct materiallog_t {
   int olid_src;    /* source operation log */
   int olid_dst;    /* destination operation log */
 };
-#define NMATERIALLOG (1024 * 1024 * 100)
+#define NMATERIALLOG (1024 * 1024 * 10)
 struct materiallog_t *materiallog;
-long nmateriallog = 0;
+long nmateriallog = 0, nmateriallog_unload = 0;
 #define NMTYPE 20
 char *mtypename[NMTYPE] =
   {
@@ -147,13 +147,13 @@ double processinglatency[NPROCEDURE] =
 
 double errorrate[NPROCEDURE] =
   {
-   0, //0.001,
+   0.001,
    0.0,
    0.0,
    0.0,
-   0, //0.001,
+   0.001,
    0.0,
-   0, //0.001,
+   0.001,
    0.0,
    0.0
   };
@@ -291,9 +291,9 @@ struct equipmentlog_t {
   int esensor;     /* sensor */
   int ereading;    /* reading */
 };
-#define NEQUIPMENTLOG (3600 * 2 * 1024)
+#define NEQUIPMENTLOG (3600 * 2 * NEQUIPMENT * BUSINESSHOURS * 2)
 struct equipmentlog_t *equipmentlog;
-long nequipmentlog = 0;
+long nequipmentlog = 0, nequipmentlog_unload = 0;
 int esensors[NEQUIPMENT][2] =
   {
    {0, 9},  /* 0 */
@@ -374,41 +374,53 @@ char *cmntword[NCMNTWORD] =
 long put_operationlog(int lid,
 		      int wid, int eid, int pid,
 		      double tsbegin, double tsend)
-{  
-  if(noperationlog >= NOPERATIONLOG){ fprintf(stderr, "Overflow (operationlog)\n"); exit(EXIT_FAILURE); }
+{
+  int idx = noperationlog % NOPERATIONLOG;
+  if(noperationlog >= noperationlog_unload + NOPERATIONLOG + 1){
+    fprintf(stderr, "Overflow (operationlog)\n");
+    exit(EXIT_FAILURE);
+  }
   
-  operationlog[noperationlog].olid = noperationlog;
-  operationlog[noperationlog].lid = lid;
-  operationlog[noperationlog].wid = wid;
-  operationlog[noperationlog].eid = eid;
-  operationlog[noperationlog].pid = pid;
-  operationlog[noperationlog].tsbegin = tsbegin;
-  operationlog[noperationlog].tsend = tsend;
+  operationlog[idx].olid = noperationlog;
+  operationlog[idx].lid = lid;
+  operationlog[idx].wid = wid;
+  operationlog[idx].eid = eid;
+  operationlog[idx].pid = pid;
+  operationlog[idx].tsbegin = tsbegin;
+  operationlog[idx].tsend = tsend;
   noperationlog++;
-  return(operationlog[noperationlog-1].olid);
+  return(operationlog[idx].olid);
 }
 
 void update_operationlog_ts(long olid,
 			    double tsbegin, double tsend)
 {
-  if(olid != operationlog[olid].olid){ fprintf(stderr, "Overflow (operationlog)\n");  exit(EXIT_FAILURE); }
+  int idx = olid % NOPERATIONLOG;
+  if(olid != operationlog[idx].olid){
+    fprintf(stderr, "Overflow (operationlog)\n");
+    exit(EXIT_FAILURE);
+  }
 
-  operationlog[olid].tsbegin = tsbegin;
-  operationlog[olid].tsend = tsend;
+  operationlog[idx].tsbegin = tsbegin;
+  operationlog[idx].tsend = tsend;
 }
 			    
 long put_materiallog(int lid,
 		     int mtype, long olid_src, long olid_dst)
 {
-  if(nmateriallog >= NMATERIALLOG){ fprintf(stderr, "Overflow (materiallog)\n");  exit(EXIT_FAILURE); }
+  int idx = nmateriallog % NMATERIALLOG;
+  if(nmateriallog >= nmateriallog_unload + NMATERIALLOG + 1){
+    fprintf(stderr, "Overflow (materiallog)\n");
+    exit(EXIT_FAILURE);
+  }
 
-  materiallog[nmateriallog].mlid = nmateriallog;
-  materiallog[nmateriallog].lid = lid;
-  materiallog[nmateriallog].mtype = mtype;
-  materiallog[nmateriallog].olid_src = olid_src;
-  materiallog[nmateriallog].olid_dst = olid_dst; 
+  materiallog[idx].mlid = nmateriallog;
+  materiallog[idx].lid = lid;
+  materiallog[idx].mtype = mtype;
+  materiallog[idx].olid_src = olid_src;
+  materiallog[idx].olid_dst = olid_dst; 
   nmateriallog++;
-  return(materiallog[nmateriallog-1].mlid);
+  return(materiallog[idx].mlid);
 }
 
 /*
@@ -633,17 +645,21 @@ long put_equipmentlog(int lid,
 		      int eid,
 		      double ts,
 		      int esensor, int ereading)
-{  
-  if(nequipmentlog >= NEQUIPMENTLOG){ fprintf(stderr, "Overflow (equipmentlog)\n"); exit(EXIT_FAILURE); }
+{
+  int idx = nequipmentlog % NEQUIPMENTLOG;
+  if(nequipmentlog >= nequipmentlog_unload + NEQUIPMENTLOG + 1){
+    fprintf(stderr, "Overflow (equipmentlog)\n");
+    exit(EXIT_FAILURE);
+  }
   
-  equipmentlog[nequipmentlog].elid = nequipmentlog;
-  equipmentlog[nequipmentlog].lid = lid;
-  equipmentlog[nequipmentlog].eid = eid;
-  equipmentlog[nequipmentlog].ts  = ts;
-  equipmentlog[nequipmentlog].esensor  = esensor;
-  equipmentlog[nequipmentlog].ereading = ereading;
+  equipmentlog[idx].elid = nequipmentlog;
+  equipmentlog[idx].lid = lid;
+  equipmentlog[idx].eid = eid;
+  equipmentlog[idx].ts  = ts;
+  equipmentlog[idx].esensor  = esensor;
+  equipmentlog[idx].ereading = ereading;
   nequipmentlog++;
-  return(equipmentlog[nequipmentlog-1].elid);
+  return(equipmentlog[idx].elid);
 }
 
 /*
@@ -767,10 +783,10 @@ void sim_equipmentlog(int lid,
 
   if(nequipmentlog  == 0)
     t = iday * 3600 * 24 - EQUIPMENTSTANDBYTIME;
-  else if((long)equipmentlog[nequipmentlog-1].ts / 3600 / 24 != t_latest / 3600 / 24)
+  else if((long)equipmentlog[(nequipmentlog-1) % NEQUIPMENTLOG].ts / 3600 / 24 != t_latest / 3600 / 24)
     t = iday * 3600 * 24 - EQUIPMENTSTANDBYTIME;
   else    
-    t = equipmentlog[nequipmentlog-1].ts;
+    t = equipmentlog[(nequipmentlog-1) % NEQUIPMENTLOG].ts;
   
   /* printf("sim_equipmentlog[%u:%u]: %ld-%ld\n", lid, iday, t, t_latest); */
   
@@ -801,7 +817,7 @@ void sim(int lid, int iday, int pmax)
   double ts_max = 0.0, ts_day_start = 0.0;
   int nm_day[NPROCEDURE];
   
-  printf("Generating %s for LID=%u ...\n", "OPERATIONLOG, MATERIALLOG and EQUIPMENTLOG", lid);
+  printf("Generating %s for LID=%u, DAY=%u ...\n", "OPERATIONLOG, MATERIALLOG and EQUIPMENTLOG", lid, iday);
 
   /* Arrange timestamps */
   
@@ -824,14 +840,16 @@ void sim(int lid, int iday, int pmax)
   nm_day[pid] = 0;
   while(1){
     if(ts > ts_day_start + 3600 * BUSINESSHOURS){
-      printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated business hours of day.\n",
-	     lid, iday, pid);
+      if(verbose)
+	printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated business hours of day.\n",
+	       lid, iday, pid);
       break;
     }
     if(nm0max)
       if(nm[pid] >= nm0max){
-	printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated total production amount.\n",
-	       lid, iday, pid);
+	if(verbose)
+	  printf("  sim[LID:%u, DAY:%u, PID:%u]: exceeded the designated total production amount.\n",
+		 lid, iday, pid);
 	break;
       }
     if(ts + processinglatency[pid] >= ts_max_equipmentlog)
@@ -843,7 +861,7 @@ void sim(int lid, int iday, int pmax)
     olid_dst = put_operationlog(lid, wid, eid, pid, ts, ts + processinglatency[pid]);
     mlid = put_materiallog(lid, mtype, olid_src, olid_dst);
     nm[pid]++; nm_day[pid]++;
-    if(((double)rand() / (RAND_MAX + 1.0)) >= errorrate[pid])
+    if(((double)hash32_mlid_lid(mlid, lid, 1) / (UINT_MAX + 1.0)) >= errorrate[pid])
       /* Only qualified materials go to the next step */
       put_operationoutput(mlid, olid_dst,
 			  lid, wid, eid, pid,
@@ -851,8 +869,9 @@ void sim(int lid, int iday, int pmax)
     if(ts + processinglatency[pid] + ts_overhead > ts_max){ ts_max = ts + processinglatency[pid] + ts_overhead; }
     ts += processinglatency[pid] + ts_overhead;
   } /* for(i) */
-  printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
-	 lid, iday, pid, nm_day[pid], nm[pid]);
+  if(verbose)
+    printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
+	   lid, iday, pid, nm_day[pid], nm[pid]);
   
   /*
    * #{1...9} (PROCEDURE{00001...00009}) takes MT{01...09}
@@ -882,15 +901,16 @@ void sim(int lid, int iday, int pmax)
 	if(!get_equipmentstatusindex(eid, t)){ ts_overhead += 1.0; }
       update_operationlog_ts(olid_dst, ts, ts + processinglatency[pid] + ts_overhead);
       nm[pid]++; nm_day[pid]++;
-      if(((double)rand() / (RAND_MAX + 1.0)) >= errorrate[pid])
+      if(((double)hash32_mlid_lid(mlid, lid, 1) / (UINT_MAX + 1.0)) >= errorrate[pid])
 	/* Only qualified materials go to the next step */
 	put_operationoutput(mlid, olid_dst,
 			    lid, wid, eid, pid,
 			    ts + processinglatency[pid] + ts_overhead);
       if(ts + processinglatency[pid] + ts_overhead > ts_max){ ts_max = ts + processinglatency[pid] + ts_overhead; }
     } /* while(1) */
-    printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
-	   lid, iday, pid, nm_day[pid], nm[pid]);
+    if(verbose)
+      printf("  sim[LID:%u, DAY:%u, PID:%u]: produced %u materials in a day, %u materials in total\n",
+	     lid, iday, pid, nm_day[pid], nm[pid]);
   } /* for(i) */
 
   /*
@@ -917,155 +937,180 @@ void sim(int lid, int iday, int pmax)
 }
 
 /*
- * Unload
+ * {open,unload,close}_files
  */
 
-void unload(int lid)
+FILE *fp_worker, *fp_equipment, *fp_procedure;
+FILE *fp_operationlog, *fp_materiallog, *fp_equipmentlog;
+
+void open_files(int lid)
 {
   int i;
-  FILE *fp;
   char fn[NBUF];
+  
+  /* open and unload WORKER */
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "WORKER", lid);
+  printf("Unloading %s (%d records) for LID=%u ...\n", "WORKER", nworker, lid);
+  if((fp_worker = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_worker, "# %s\n", fn);
+  fprintf(fp_worker, "# WID, LID, WNAME\n");
+  for(i=0; i<nworker; i++){
+    assert(lid == worker[i].lid);
+    fprintf(fp_worker, "%d|%d|%s\n",
+	    worker[i].wid, worker[i].lid,
+	    worker[i].wname);
+  }
+
+  /* open and unload EQUIPMENT */
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENT", lid);
+  printf("Unloading %s (%d records) for LID=%u ...\n", "EQUIPMENT", nequipment, lid);
+  if((fp_equipment = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_equipment, "# %s\n", fn);
+  fprintf(fp_equipment, "# EID, LID, ENAME\n");
+  for(i=0; i<nequipment; i++){
+    assert(lid == equipment[i].lid);
+    fprintf(fp_equipment, "%d|%d|%s\n",
+	    equipment[i].eid, equipment[i].lid,
+	    equipment[i].ename);
+  }
+
+  /* open and unload PROCEDURE */
+  snprintf(fn, NBUF-1, "%s/%s.dat", dr_out, "PROCEDURE");
+  printf("Unloading %s (%d records) ...\n", "PROCEDURE", nprocedure);
+  if((fp_procedure = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_procedure, "# %s\n", fn);
+  fprintf(fp_procedure, "# PID, LID, PNAME\n");
+  for(i=0; i<nprocedure; i++)
+    fprintf(fp_procedure, "%d|%s\n", procedure[i].pid,
+	    procedure[i].pname);
+
+  /* open OPERATIONLOG */
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "OPERATIONLOG", lid);
+  if((fp_operationlog = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_operationlog, "# %s\n", fn);
+  fprintf(fp_operationlog, "# OLID, LID, WID, EID, PID, TSBEGIN, TSEND, COMMENT\n");
+
+  /* open MATERIALLOG */
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "MATERIALLOG", lid);
+  if((fp_materiallog = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_materiallog, "# %s\n", fn);
+  fprintf(fp_materiallog, "# MLID, LID, MTYPE, OLID_SRC, OLID_DST, SERIAL, WEIGHT, DIMENSIONX, DIMENSIONY, DIMENSIONZ, SHAPESOCRE, TEMPERATURE, COMMENT\n");
+
+  /* open EQUIPMENTLOG */
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENTLOG", lid);
+  if((fp_equipmentlog = fopen(fn, "w")) == NULL){
+    perror("fopen"); exit(EXIT_FAILURE);
+  }
+  fprintf(fp_equipmentlog, "# %s\n", fn);
+  fprintf(fp_equipmentlog, "# ELID, LID, EID, TS, ESENSOR, EREADING\n");
+}
+
+void unload_files(int lid)
+{
+  int i, idx;
   time_t t1, t2;
   char dt1[NBUF], dt2[NBUF];
   char cmnt[NBUF];
   
-  /* unload WORKER */
-  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "WORKER", lid);
-  printf("Unloading %s (%d records) for LID=%u ...\n", "WORKER", nworker, lid);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# WID, LID, WNAME\n");
-  for(i=0; i<nworker; i++){
-    assert(lid == worker[i].lid);
-    fprintf(fp, "%d|%d|%s\n",
-	    worker[i].wid, worker[i].lid,
-	    worker[i].wname);
-  }
-  fclose(fp);
-
-  /* unload EQUIPMENT */
-  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENT", lid);
-  printf("Unloading %s (%d records) for LID=%u ...\n", "EQUIPMENT", nequipment, lid);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# EID, LID, ENAME\n");
-  for(i=0; i<nequipment; i++){
-    assert(lid == equipment[i].lid);
-    fprintf(fp, "%d|%d|%s\n",
-	    equipment[i].eid, equipment[i].lid,
-	    equipment[i].ename);
-  }
-  fclose(fp);
-
-  /* unload PROCEDURE */
-  snprintf(fn, NBUF-1, "%s/%s.dat", dr_out, "PROCEDURE");
-  printf("Unloading %s (%d records) ...\n", "PROCEDURE", nprocedure);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# PID, LID, PNAME\n");
-  for(i=0; i<nprocedure; i++)
-    fprintf(fp, "%d|%s\n", procedure[i].pid,
-	    procedure[i].pname);
-  fclose(fp);
-
   /* unload OPERATIONLOG */
-  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "OPERATIONLOG", lid);
-  printf("Unloading %s (%ld records) for LID=%u ...\n", "OPERATIONLOG", noperationlog, lid);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# OLID, LID, WID, EID, PID, TSBEGIN, TSEND, COMMENT\n");
-  for(i=0; i<noperationlog; i++){
-    assert(lid == operationlog[i].lid);
-    t1 = TSBASE + operationlog[i].tsbegin;
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "OPERATIONLOG",
+	 noperationlog - noperationlog_unload, noperationlog, lid);
+  for(i=noperationlog_unload; i<noperationlog; i++){
+    idx = i % NOPERATIONLOG;
+    assert(lid == operationlog[idx].lid);
+    t1 = TSBASE + operationlog[idx].tsbegin;
     strftime(dt1, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t1));
-    t2 = TSBASE + operationlog[i].tsend;
+    t2 = TSBASE + operationlog[idx].tsend;
     strftime(dt2, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t2));
-    generate_olcomment(cmnt, NBUF-1, operationlog[i].olid, operationlog[i].lid);
+    generate_olcomment(cmnt, NBUF-1, operationlog[idx].olid, operationlog[idx].lid);
     if(is_millisecond)
-      fprintf(fp, "%ld|%d|%d|%d|%d|%s.%03u|%s.%03u|%s\n",
-	      operationlog[i].olid, operationlog[i].lid,
-	      operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
-	      dt1, (unsigned int)(operationlog[i].tsbegin * 1000) % 1000,
-	      dt2, (unsigned int)(operationlog[i].tsend   * 1000) % 1000,
+      fprintf(fp_operationlog, "%ld|%d|%d|%d|%d|%s.%03u|%s.%03u|%s\n",
+	      operationlog[idx].olid, operationlog[idx].lid,
+	      operationlog[idx].wid, operationlog[idx].eid, operationlog[idx].pid,
+	      dt1, (unsigned int)(operationlog[idx].tsbegin * 1000) % 1000,
+	      dt2, (unsigned int)(operationlog[idx].tsend   * 1000) % 1000,
 	      cmnt);
     else
-      fprintf(fp, "%ld|%d|%d|%d|%d|%s|%s|%s\n",
-	      operationlog[i].olid, operationlog[i].lid,
-	      operationlog[i].wid, operationlog[i].eid, operationlog[i].pid,
+      fprintf(fp_operationlog, "%ld|%d|%d|%d|%d|%s|%s|%s\n",
+	      operationlog[idx].olid, operationlog[idx].lid,
+	      operationlog[idx].wid, operationlog[idx].eid, operationlog[idx].pid,
 	      dt1,
 	      dt2,
-	      cmnt);
-      
+	      cmnt);    
   }
-  fclose(fp);
+  noperationlog_unload = noperationlog;
 
   /* unload MATERIALLOG */
-  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "MATERIALLOG", lid);
-  printf("Unloading %s (%ld records) for LID=%u ...\n", "MATERIALLOG", nmateriallog, lid);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# MLID, LID, MTYPE, OLID_SRC, OLID_DST, SERIAL, WEIGHT, DIMENSIONX, DIMENSIONY, DIMENSIONZ, SHAPESOCRE, TEMPERATURE, COMMENT\n");
-  for(i=0; i<nmateriallog; i++){
-    assert(lid == materiallog[i].lid);
-    generate_mlcomment(cmnt, NBUF-1, materiallog[i].mlid, materiallog[i].lid);
-    fprintf(fp, "%ld|%d|%s|%d|%d|D%06d-L%06d-M%010ld|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%s\n",
-	    materiallog[i].mlid, materiallog[i].lid,
-	    mtypename[materiallog[i].mtype],
-	    materiallog[i].olid_src,
-	    materiallog[i].olid_dst,
-	    0, materiallog[i].lid, materiallog[i].mlid,
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_WGHT,
-				     materiallog[i].mlid, materiallog[i].lid),
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMX,
-				     materiallog[i].mlid, materiallog[i].lid),
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMY,
-				     materiallog[i].mlid, materiallog[i].lid),
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_DIMZ,
-				     materiallog[i].mlid, materiallog[i].lid),
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_SHPS,
-				     materiallog[i].mlid, materiallog[i].lid),
-	    generate_msensor_reading(materiallog[i].mtype, MSENSOR_TEMP,
-				     materiallog[i].mlid, materiallog[i].lid),
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "MATERIALLOG",
+	 nmateriallog - nmateriallog_unload, nmateriallog, lid);
+  for(i=nmateriallog_unload; i<nmateriallog; i++){
+    idx = i % NMATERIALLOG;
+    assert(lid == materiallog[idx].lid);
+    generate_mlcomment(cmnt, NBUF-1, materiallog[idx].mlid, materiallog[idx].lid);
+    fprintf(fp_materiallog, "%ld|%d|%s|%d|%d|D%06d-L%06d-M%010ld|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%s\n",
+	    materiallog[idx].mlid, materiallog[idx].lid,
+	    mtypename[materiallog[idx].mtype],
+	    materiallog[idx].olid_src,
+	    materiallog[idx].olid_dst,
+	    0, materiallog[idx].lid, materiallog[idx].mlid,
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_WGHT,
+				     materiallog[idx].mlid, materiallog[idx].lid),
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_DIMX,
+				     materiallog[idx].mlid, materiallog[idx].lid),
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_DIMY,
+				     materiallog[idx].mlid, materiallog[idx].lid),
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_DIMZ,
+				     materiallog[idx].mlid, materiallog[idx].lid),
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_SHPS,
+				     materiallog[idx].mlid, materiallog[idx].lid),
+	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_TEMP,
+				     materiallog[idx].mlid, materiallog[idx].lid),
 	    cmnt);
   }
-  fclose(fp);
+  nmateriallog_unload = nmateriallog;
 
   /* unload EQUIPMENTLOG */
-  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENTLOG", lid);
-  printf("Unloading %s (%ld records) for LID=%u ...\n", "EQUIPMENTLOG", nequipmentlog, lid);
-  if((fp = fopen(fn, "w")) == NULL){
-    perror("fopen"); exit(EXIT_FAILURE);
-  }
-  fprintf(fp, "# %s\n", fn);
-  fprintf(fp, "# ELID, LID, EID, TS, ESENSOR, EREADING\n");
-  for(i=0; i<nequipmentlog; i++){
-    assert(lid == equipmentlog[i].lid);
-    t1 = TSBASE + equipmentlog[i].ts;
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "EQUIPMENTLOG",
+	 nequipmentlog - nequipmentlog_unload, nequipmentlog, lid);
+  for(i=nequipmentlog_unload; i<nequipmentlog; i++){
+    idx = i % NEQUIPMENTLOG;
+    assert(lid == equipmentlog[idx].lid);
+    t1 = TSBASE + equipmentlog[idx].ts;
     strftime(dt1, NBUF-1, "%Y-%m-%d %H:%M:%S", localtime(&t1));
     if(is_millisecond)
-      fprintf(fp, "%ld|%d|%d|%s.%03u|%s|%d\n",
-	      equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
+      fprintf(fp_equipmentlog, "%ld|%d|%d|%s.%03u|%s|%d\n",
+	      equipmentlog[idx].elid, equipmentlog[idx].lid, equipmentlog[idx].eid,
 	      dt1, 0,
-	      esensormodel[equipmentlog[i].esensor].sensorname,
-	      equipmentlog[i].ereading);
+	      esensormodel[equipmentlog[idx].esensor].sensorname,
+	      equipmentlog[idx].ereading);
     else
-      fprintf(fp, "%ld|%d|%d|%s|%s|%d\n",
-	      equipmentlog[i].elid, equipmentlog[i].lid, equipmentlog[i].eid,
+      fprintf(fp_equipmentlog, "%ld|%d|%d|%s|%s|%d\n",
+	      equipmentlog[idx].elid, equipmentlog[idx].lid, equipmentlog[idx].eid,
 	      dt1,
-	      esensormodel[equipmentlog[i].esensor].sensorname,
-	      equipmentlog[i].ereading);      
+	      esensormodel[equipmentlog[idx].esensor].sensorname,
+	      equipmentlog[idx].ereading);      
   }
-  fclose(fp);
+  nequipmentlog_unload = nequipmentlog;
+}
+
+void close_files(int lid)
+{
+  fclose(fp_worker);
+  fclose(fp_equipment);
+  fclose(fp_procedure);
+  fclose(fp_operationlog);
+  fclose(fp_materiallog);
+  fclose(fp_equipmentlog);
 }
 
 /*
@@ -1101,7 +1146,11 @@ Options:\n\
   -o <dir> : specify output directory\n\
              (default: ./)\n\
   -M     : enable millisecond-scale dataset generation (default: second-scale)\n\
-  -v     : increase verbose levels\n",
+  -v     : increase verbose levels\n\
+Example:\n\
+  dgen -l 101 -d 10 -o /tmp\n\
+    generates a dataset of 10-day business operations of the production line #101 in /tmp.\n\
+",
 	 LID_MIN, LID_MAX,
 	 NDAY_MIN, NDAY_MAX);
 }
@@ -1159,14 +1208,13 @@ int main(int argc, char **argv)
     exit(EXIT_FAILURE);
   }
   
-  /* set random seed */
-  srand(lid);
-  
-  /* conduct simulation */
   init(lid);
-  for(i=0; i<nday; i++)
+  open_files(lid);
+  for(i=0; i<nday; i++){
     sim(lid, i, pmax);
-  unload(lid);
+    unload_files(lid);
+  }
+  close_files(lid);
   fin(lid);
 
   return(EXIT_SUCCESS);
