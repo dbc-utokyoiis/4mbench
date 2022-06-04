@@ -1015,7 +1015,7 @@ void open_files(int lid)
   fprintf(fp_equipmentlog, "# ELID, LID, EID, TS, ESENSOR, EREADING\n");
 }
 
-void unload_files(int lid)
+void unload_files(int lid, int iday)
 {
   int i, idx;
   time_t t1, t2;
@@ -1023,8 +1023,8 @@ void unload_files(int lid)
   char cmnt[NBUF];
   
   /* unload OPERATIONLOG */
-  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "OPERATIONLOG",
-	 noperationlog - noperationlog_unload, noperationlog, lid);
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u, DAY=%u...\n", "OPERATIONLOG",
+	 noperationlog - noperationlog_unload, noperationlog, lid, iday);
   for(i=noperationlog_unload; i<noperationlog; i++){
     idx = i % NOPERATIONLOG;
     assert(lid == operationlog[idx].lid);
@@ -1051,18 +1051,20 @@ void unload_files(int lid)
   noperationlog_unload = noperationlog;
 
   /* unload MATERIALLOG */
-  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "MATERIALLOG",
-	 nmateriallog - nmateriallog_unload, nmateriallog, lid);
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u, DAY=%u ...\n", "MATERIALLOG",
+	 nmateriallog - nmateriallog_unload, nmateriallog, lid, iday);
   for(i=nmateriallog_unload; i<nmateriallog; i++){
     idx = i % NMATERIALLOG;
     assert(lid == materiallog[idx].lid);
+    t1 = TSBASE + 3600 * 24 * iday;
+    strftime(dt1, NBUF-1, "%y%m%d", localtime(&t1));
     generate_mlcomment(cmnt, NBUF-1, materiallog[idx].mlid, materiallog[idx].lid);
-    fprintf(fp_materiallog, "%ld|%d|%s|%d|%d|D%06d-L%06d-M%010ld|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%s\n",
+    fprintf(fp_materiallog, "%ld|%d|%s|%d|%d|D%6s-L%06d-M%010ld|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%09.3f|%s\n",
 	    materiallog[idx].mlid, materiallog[idx].lid,
 	    mtypename[materiallog[idx].mtype],
 	    materiallog[idx].olid_src,
 	    materiallog[idx].olid_dst,
-	    0, materiallog[idx].lid, materiallog[idx].mlid,
+	    dt1, materiallog[idx].lid, materiallog[idx].mlid,
 	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_WGHT,
 				     materiallog[idx].mlid, materiallog[idx].lid),
 	    generate_msensor_reading(materiallog[idx].mtype, MSENSOR_DIMX,
@@ -1080,8 +1082,8 @@ void unload_files(int lid)
   nmateriallog_unload = nmateriallog;
 
   /* unload EQUIPMENTLOG */
-  printf("Unloading %s (%ld records, %ld records in total) for LID=%u ...\n", "EQUIPMENTLOG",
-	 nequipmentlog - nequipmentlog_unload, nequipmentlog, lid);
+  printf("Unloading %s (%ld records, %ld records in total) for LID=%u, DAY=%u ...\n", "EQUIPMENTLOG",
+	 nequipmentlog - nequipmentlog_unload, nequipmentlog, lid, iday);
   for(i=nequipmentlog_unload; i<nequipmentlog; i++){
     idx = i % NEQUIPMENTLOG;
     assert(lid == equipmentlog[idx].lid);
@@ -1212,7 +1214,7 @@ int main(int argc, char **argv)
   open_files(lid);
   for(i=0; i<nday; i++){
     sim(lid, i, pmax);
-    unload_files(lid);
+    unload_files(lid, i);
   }
   close_files(lid);
   fin(lid);
