@@ -31,6 +31,7 @@
 
 int is_millisecond = 0;
 int verbose = 0;
+char *dr_out = "./";
 
 struct worker_t {
   int wid;          /* worker id */
@@ -929,7 +930,7 @@ void unload(int lid)
   char cmnt[NBUF];
   
   /* unload WORKER */
-  snprintf(fn, NBUF-1, "%s%06u.dat", "WORKER", lid);
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "WORKER", lid);
   printf("Unloading %s (%d records) for LID=%u ...\n", "WORKER", nworker, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -945,7 +946,7 @@ void unload(int lid)
   fclose(fp);
 
   /* unload EQUIPMENT */
-  snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENT", lid);
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENT", lid);
   printf("Unloading %s (%d records) for LID=%u ...\n", "EQUIPMENT", nequipment, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -961,7 +962,7 @@ void unload(int lid)
   fclose(fp);
 
   /* unload PROCEDURE */
-  snprintf(fn, NBUF-1, "%s.dat", "PROCEDURE");
+  snprintf(fn, NBUF-1, "%s/%s.dat", dr_out, "PROCEDURE");
   printf("Unloading %s (%d records) ...\n", "PROCEDURE", nprocedure);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -974,7 +975,7 @@ void unload(int lid)
   fclose(fp);
 
   /* unload OPERATIONLOG */
-  snprintf(fn, NBUF-1, "%s%06u.dat", "OPERATIONLOG", lid);
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "OPERATIONLOG", lid);
   printf("Unloading %s (%ld records) for LID=%u ...\n", "OPERATIONLOG", noperationlog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -1007,7 +1008,7 @@ void unload(int lid)
   fclose(fp);
 
   /* unload MATERIALLOG */
-  snprintf(fn, NBUF-1, "%s%06u.dat", "MATERIALLOG", lid);
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "MATERIALLOG", lid);
   printf("Unloading %s (%ld records) for LID=%u ...\n", "MATERIALLOG", nmateriallog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -1040,7 +1041,7 @@ void unload(int lid)
   fclose(fp);
 
   /* unload EQUIPMENTLOG */
-  snprintf(fn, NBUF-1, "%s%06u.dat", "EQUIPMENTLOG", lid);
+  snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "EQUIPMENTLOG", lid);
   printf("Unloading %s (%ld records) for LID=%u ...\n", "EQUIPMENTLOG", nequipmentlog, lid);
   if((fp = fopen(fn, "w")) == NULL){
     perror("fopen"); exit(EXIT_FAILURE);
@@ -1093,10 +1094,12 @@ Usage: dgen [options]\n\
 Description:\n\
   The 4mbench dataset generator\n\
 Options:\n\
-  -l <n> : specify LID (production line id) (range: %u to %u) (default: 0)\n\
-  -d <n> : specify the number of simulation days (range: %u to %u) (default: 1)\n\
-  -n <n> : limit the maximim total number of final products to be produced (FOR DEBUGGING)\n\
-           (default: disabled)\n\
+  -l <num> : specify LID (production line id) (range: %u to %u) (default: 0)\n\
+  -d <num> : specify the number of simulation days (range: %u to %u) (default: 1)\n\
+  -n <num> : limit the maximim total number of final products to be produced (FOR DEBUGGING)\n\
+             (default: disabled)\n\
+  -o <dir> : specify output directory\n\
+             (default: ./)\n\
   -M     : enable millisecond-scale dataset generation (default: second-scale)\n\
   -v     : increase verbose levels\n",
 	 LID_MIN, LID_MAX,
@@ -1113,7 +1116,7 @@ int main(int argc, char **argv)
   
   /* process command options */
   while(1){
-    if((opt = getopt(argc, argv, "l:d:n:hMv")) == EOF)
+    if((opt = getopt(argc, argv, "l:d:n:o:hMv")) == EOF)
       break;
     switch(opt){
     case 'l':
@@ -1124,6 +1127,9 @@ int main(int argc, char **argv)
       break;
     case 'n':
       pmax = atoi(optarg);
+      break;
+    case 'o':
+      dr_out = strdup(optarg);
       break;
     case 'h':
       print_usage();
