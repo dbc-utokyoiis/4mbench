@@ -797,7 +797,8 @@ void sim_equipmentlog(int lid,
     t = equipmentlog[(nequipmentlog-1) % NEQUIPMENTLOG].ts;
   
   /* printf("sim_equipmentlog[%u:%u]: %ld-%ld\n", lid, iday, t, t_latest); */
-  
+
+  t++;
   for(; t <= t_latest; t++){
     for(i = 0; i < NEQUIPMENT; i++){
       int r1, r2;
