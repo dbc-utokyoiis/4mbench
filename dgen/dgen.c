@@ -503,6 +503,26 @@ struct operationoutput_t *get_operationoutput(int pid)
 #define FNV_PRIME 16777619U
 #define FNV_BASE  2166136261U
 
+unsigned int hash32_id_lid(int id, int lid, int key)
+{
+  unsigned int h;
+
+  h = FNV_BASE;
+  h = (FNV_PRIME * h) ^ ((id >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((id >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((id >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((id >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((lid >> 24) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 0) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 8) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 16) & 0x000000ff);
+  h = (FNV_PRIME * h) ^ ((key >> 24) & 0x000000ff);
+  return(h);
+}
+
 unsigned int hash32_mlid_lid(long mlid, int lid, int key)
 {
   unsigned int h;
@@ -555,6 +575,39 @@ unsigned int hash32_t_lid(long t, int lid, int key)
  * generate comment
  */
 
+void generate_wcomment(char *s, int l, int wid, int lid)
+{
+  snprintf(s, l,
+	   "%s %s %s %s %s",
+	   cmntword[hash32_id_lid(wid, lid, 1000) % NCMNTWORD],
+	   cmntword[hash32_id_lid(wid, lid, 1001) % NCMNTWORD],
+	   cmntword[hash32_id_lid(wid, lid, 1002) % NCMNTWORD],
+	   cmntword[hash32_id_lid(wid, lid, 1003) % NCMNTWORD],
+	   cmntword[hash32_id_lid(wid, lid, 1004) % NCMNTWORD]);
+}
+
+void generate_ecomment(char *s, int l, int eid, int lid)
+{
+  snprintf(s, l,
+	   "%s %s %s %s %s",
+	   cmntword[hash32_id_lid(eid, lid, 2000) % NCMNTWORD],
+	   cmntword[hash32_id_lid(eid, lid, 2001) % NCMNTWORD],
+	   cmntword[hash32_id_lid(eid, lid, 2002) % NCMNTWORD],
+	   cmntword[hash32_id_lid(eid, lid, 2003) % NCMNTWORD],
+	   cmntword[hash32_id_lid(eid, lid, 2004) % NCMNTWORD]);
+}
+
+void generate_pcomment(char *s, int l, int pid, int lid)
+{
+  snprintf(s, l,
+	   "%s %s %s %s %s",
+	   cmntword[hash32_id_lid(pid, lid, 3000) % NCMNTWORD],
+	   cmntword[hash32_id_lid(pid, lid, 3001) % NCMNTWORD],
+	   cmntword[hash32_id_lid(pid, lid, 3002) % NCMNTWORD],
+	   cmntword[hash32_id_lid(pid, lid, 3003) % NCMNTWORD],
+	   cmntword[hash32_id_lid(pid, lid, 3004) % NCMNTWORD]);
+}
+
 void generate_olcomment(char *s, int l, long olid, int lid)
 {
   snprintf(s, l,
@@ -563,7 +616,7 @@ void generate_olcomment(char *s, int l, long olid, int lid)
 	   cmntword[hash32_mlid_lid(olid, lid, 101) % NCMNTWORD],
 	   cmntword[hash32_mlid_lid(olid, lid, 102) % NCMNTWORD],
 	   cmntword[hash32_mlid_lid(olid, lid, 103) % NCMNTWORD],
-	   cmntword[hash32_mlid_lid(olid, lid, 1044) % NCMNTWORD]);
+	   cmntword[hash32_mlid_lid(olid, lid, 104) % NCMNTWORD]);
 }
 
 void generate_mlcomment(char *s, int l, long mlid, int lid)
@@ -957,6 +1010,7 @@ void open_files(int lid)
 {
   int i;
   char fn[NBUF];
+  char cmnt[NBUF];
   
   /* open and unload WORKER */
   snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "WORKER", lid);
@@ -965,12 +1019,14 @@ void open_files(int lid)
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp_worker, "# %s\n", fn);
-  fprintf(fp_worker, "# WID, LID, WNAME\n");
+  fprintf(fp_worker, "# WID, LID, WNAME, COMMENT\n");
   for(i=0; i<nworker; i++){
     assert(lid == worker[i].lid);
-    fprintf(fp_worker, "%d|%d|%s\n",
+    generate_pcomment(cmnt, NBUF-1, worker[i].wid, worker[i].lid);
+    fprintf(fp_worker, "%d|%d|%s|%s\n",
 	    worker[i].wid, worker[i].lid,
-	    worker[i].wname);
+	    worker[i].wname,
+	    cmnt);
   }
 
   /* open and unload EQUIPMENT */
@@ -980,12 +1036,14 @@ void open_files(int lid)
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp_equipment, "# %s\n", fn);
-  fprintf(fp_equipment, "# EID, LID, ENAME\n");
+  fprintf(fp_equipment, "# EID, LID, ENAME, COMMENT\n");
   for(i=0; i<nequipment; i++){
     assert(lid == equipment[i].lid);
-    fprintf(fp_equipment, "%d|%d|%s\n",
+    generate_ecomment(cmnt, NBUF-1, equipment[i].eid, equipment[i].lid);
+    fprintf(fp_equipment, "%d|%d|%s|%s\n",
 	    equipment[i].eid, equipment[i].lid,
-	    equipment[i].ename);
+	    equipment[i].ename,
+	    cmnt);
   }
 
   /* open and unload PROCEDURE */
@@ -995,11 +1053,14 @@ void open_files(int lid)
     perror("fopen"); exit(EXIT_FAILURE);
   }
   fprintf(fp_procedure, "# %s\n", fn);
-  fprintf(fp_procedure, "# PID, LID, PNAME\n");
-  for(i=0; i<nprocedure; i++)
-    fprintf(fp_procedure, "%d|%s\n", procedure[i].pid,
-	    procedure[i].pname);
-
+  fprintf(fp_procedure, "# PID, LID, PNAME, COMMENT\n");
+  for(i=0; i<nprocedure; i++){
+    generate_pcomment(cmnt, NBUF-1, procedure[i].pid, 0);
+    fprintf(fp_procedure, "%d|%s|%s\n", procedure[i].pid,
+	    procedure[i].pname,
+	    cmnt);
+  }
+  
   /* open OPERATIONLOG */
   snprintf(fn, NBUF-1, "%s/%s%06u.dat", dr_out, "OPERATIONLOG", lid);
   if((fp_operationlog = fopen(fn, "w")) == NULL){
