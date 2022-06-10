@@ -221,7 +221,7 @@ struct msensormodel_t msensormodel[NMTYPE][NMSENSOR] =
     {MODELTYPE_FULLNDIST, 90.0,  1.0},
     {MODELTYPE_FULLNDIST, 4.5,   0.4},
     {MODELTYPE_FULLNDIST, 4.5,   0.4},
-    {MODELTYPE_FULLNDIST, 0.0,   0.09},
+    {MODELTYPE_FULLNDIST, 0.9,   0.09},
     {MODELTYPE_HALFNDIST, 1.00,  0.02},
     {MODELTYPE_FULLNDIST, 180.0, 2.0}
    },
@@ -229,7 +229,7 @@ struct msensormodel_t msensormodel[NMTYPE][NMSENSOR] =
     {MODELTYPE_FULLNDIST, 90.0,  1.0},
     {MODELTYPE_FULLNDIST, 4.5,   0.4},
     {MODELTYPE_FULLNDIST, 4.5,   0.4},
-    {MODELTYPE_FULLNDIST, 0.0,   0.09},
+    {MODELTYPE_FULLNDIST, 0.9,   0.09},
     {MODELTYPE_HALFNDIST, 1.00,  0.02},
     {MODELTYPE_FULLNDIST, 20.0,  15.0}
    },
@@ -282,7 +282,7 @@ struct msensormodel_t msensormodel[NMTYPE][NMSENSOR] =
     {MODELTYPE_FULLNDIST, 20.0,  15.0}
    }
   };
-#define MSENSOR_ERRORSCALE 5
+#define MSENSOR_ERRORSCALE 4.0
 
 struct equipmentlog_t {
   long elid;       /* equipment log id */
@@ -325,17 +325,17 @@ struct esensormodel_t esensormodel[NEQUIPMENT * 2] =
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 6 */
    {"PRESSURE",    MODELTYPE_FULLNDIST, 15.0,  5.0},   /* 7 */
    {"TEMPERATURE", MODELTYPE_FULLNDIST, 20.0,  15.0},  /* 8 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 9 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 10 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 11 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 12 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 13 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 14 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 15 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02},  /* 16 */
-   {"STATUS",      MODELTYPE_HALFNDIST, 1.01,  0.02}   /* 17 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 9 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 10 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 11 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 12 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 13 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 14 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 15 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 16 */
+   {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02}   /* 17 */
   };
-#define ESENSOR_ERRORSCALE 5
+#define ESENSOR_ERRORSCALE 3.0
 
 #define NCMNTWORD 25
 char *cmntword[NCMNTWORD] =
@@ -585,9 +585,9 @@ inline double ndist_mlid_lid(double average, double deviation, long mlid, int li
 {
   double x, y, z = 0.0;
   x = (double)(hash32_mlid_lid(mlid, lid, key)) / (UINT_MAX + 1.0);
-  y = (double)(hash32_mlid_lid(mlid, lid, key << 7)) / (UINT_MAX + 1.0);
+  y = (double)(hash32_mlid_lid(mlid + NMATERIALLOG * 0.1, lid, key)) / (UINT_MAX + 1.0);
   if(x != 0.0 && y != 0.0)
-    z = sqrt(-2 * log(x)) * cos(2 * M_PI * y); /* Box-Muller approximation */
+    z = sqrt(-2.0 * log(x)) * cos(2.0 * M_PI * y); /* Box-Muller approximation */
   return(average + deviation * z);
 }
 
@@ -617,9 +617,10 @@ inline double ndist_t_lid(double average, double deviation, int t, int lid, int 
 {
   double x, y, z = 0.0;
   x = (double)(hash32_t_lid(t, lid, key)) / (UINT_MAX + 1.0);
-  y = (double)(hash32_t_lid(t, lid, key << 7)) / (UINT_MAX + 1.0);
+  y = (double)(hash32_t_lid(t + 3600 * 24 * 365, lid, key)) / (UINT_MAX + 1.0);
+
   if(x != 0.0 && y != 0.0)
-    z = sqrt(-2 * log(x)) * cos(2 * M_PI * y); /* Box-Muller approximation */
+    z = sqrt(-2.0 * log(x)) * cos(2.0 * M_PI * y); /* Box-Muller approximation */
   return(average + deviation * z);
 }
 
