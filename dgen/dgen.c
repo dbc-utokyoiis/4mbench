@@ -282,7 +282,7 @@ struct msensormodel_t msensormodel[NMTYPE][NMSENSOR] =
     {MODELTYPE_FULLNDIST, 20.0,  15.0}
    }
   };
-#define MSENSOR_ERRORSCALE 4.0
+#define MSENSOR_ERRORSCALE 4.5
 
 struct equipmentlog_t {
   long elid;       /* equipment log id */
@@ -335,7 +335,7 @@ struct esensormodel_t esensormodel[NEQUIPMENT * 2] =
    {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02},  /* 16 */
    {"STATUS",      MODELTYPE_HALFNDIST, 1.02,  0.02}   /* 17 */
   };
-#define ESENSOR_ERRORSCALE 3.0
+#define ESENSOR_ERRORSCALE 4.0
 
 #define NCMNTWORD 25
 char *cmntword[NCMNTWORD] =
