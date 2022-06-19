@@ -18,7 +18,7 @@ A dataset generator *m4dgen* is placed in the `m4dgen/` directory.
 
 A DDL script is placed in the `ddl/` directory.
 
-## Test query
+## Test query (decision support queries)
 
 SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `query/` directory.
 
@@ -29,4 +29,10 @@ SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `qu
 - Equipment failure influence analysis (4mQ.5)
 - Production yield analysis (4mQ.6)
 
-# EOF
+## Authors
+
+- Kazuo Goda (UTokyo-IIS)
+
+## License
+
+TBD
