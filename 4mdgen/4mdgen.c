@@ -1,6 +1,6 @@
-/* dgen.c */
+/* 4mdgen.c */
 
-#include "dgen.h"
+#include "4mdgen.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1208,7 +1208,7 @@ void fin(int lid)
 void print_usage(void)
 {
   printf("\
-Usage: dgen [options]\n\
+Usage: 4mdgen [options]\n\
 Description:\n\
   The 4mbench dataset generator\n\
 Options:\n\
@@ -1221,7 +1221,7 @@ Options:\n\
   -M     : enable millisecond-scale dataset generation (default: second-scale)\n\
   -v     : increase verbose levels\n\
 Example:\n\
-  dgen -l 101 -d 10 -o /tmp\n\
+  4mdgen -l 101 -d 10 -o /tmp\n\
     generates a dataset of 10-day business operations of the production line #101 in /tmp.\n\
 ",
 	 LID_MIN, LID_MAX,
@@ -1293,4 +1293,4 @@ int main(int argc, char **argv)
   return(EXIT_SUCCESS);
 }
 
-/* eof of dgen.c */
+/* eof of 4mdgen.c */

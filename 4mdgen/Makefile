@@ -14,8 +14,8 @@ CHMOD = chmod
 
 PREFIX = /usr/local
 
-BINS = dgen
-HDRS = dgen.h
+BINS = 4mdgen
+HDRS = 4mdgen.h
 
 #
 # Do not change below.
@@ -58,7 +58,7 @@ clean-top:
 # commands
 #
 
-dgen: dgen.o
-dgen.o: dgen.c dgen.h
+4mdgen: 4mdgen.o
+4mdgen.o: 4mdgen.c 4mdgen.h
 
 # end of Makefile
