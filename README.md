@@ -1,5 +1,4 @@
-4mbench
-============
+# 4mbench
 
 4mbench is a tool for performance benchmark of manufacturing business datababase.
 
@@ -11,7 +10,7 @@ A dataset generator *m4dgen* is placed in the `m4dgen/` directory.
 
 	$ make
 
-### Generates a dataset of 10-day business operations of the production line #101 in the `/tmp` directory
+### Generate a dataset of 10-day business operations of the production line #101 in the `/tmp` directory
 
 	$ 4mdgen -l 101 -d 10 -o /tmp
 
