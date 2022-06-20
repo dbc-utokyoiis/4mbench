@@ -32,6 +32,7 @@ SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `./
 ## Original author
 
 - Kazuo Goda (UTokyo-IIS)
+- Yuto Hayamizu (UTokyo-IIS)
 
 ## Contributors
 
