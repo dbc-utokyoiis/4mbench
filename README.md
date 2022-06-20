@@ -29,7 +29,7 @@ SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `./
 - Equipment failure influence analysis (4mQ.5)
 - Production yield analysis (4mQ.6)
 
-## Original author
+## Original authors
 
 - Kazuo Goda (UTokyo-IIS)
 - Yuto Hayamizu (UTokyo-IIS)
