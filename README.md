@@ -14,6 +14,10 @@ A dataset generator *m4dgen* is placed in the `m4dgen/` directory.
 
 	$ 4mdgen -l 101 -d 10 -o /tmp
 
+### Generate a dataset of 10-day business operations of the production lines #101 to #110 in the `/tmp` directory
+
+	$ l=101; while [ $l -lt 111 ]; do 4mdgen -l $l -d 10 -o /tmp; l=`expr $l + 1`; done
+
 ## Database schema
 
 A DDL script is placed in the `./ddl/` directory.
