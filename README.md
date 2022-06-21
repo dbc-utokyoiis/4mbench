@@ -10,13 +10,13 @@ A dataset generator *m4dgen* is placed in the `m4dgen/` directory.
 
 	$ make
 
-### Generate a dataset of 10-day business operations of the production line #101 in the `/tmp` directory
+### Generate a dataset of 10-day business operations (i.e., on 2022-04-01 to 2022-04-10) of a production line (#101) in the `/tmp` directory
 
 	$ 4mdgen -l 101 -d 10 -o /tmp
 
-### Generate a dataset of 10-day business operations of the production lines #101 to #110 in the `/tmp` directory
+### Generate a dataset of 12-day business operations (i.e., on 2022-04-01 to 2022-04-12) of three production lines (#101 to #103) in the `/tmp` directory
 
-	$ l=101; while [ $l -lt 111 ]; do 4mdgen -l $l -d 10 -o /tmp; l=`expr $l + 1`; done
+	$ l=101; while [ $l -lt 104 ]; do 4mdgen -l $l -d 12 -o /tmp; l=`expr $l + 1`; done
 
 ## Database schema
 
