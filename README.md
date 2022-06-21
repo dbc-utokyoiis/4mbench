@@ -4,7 +4,7 @@
 
 ## Dataset generator
 
-A dataset generator *m4dgen* is placed in the `m4dgen/` directory.
+A dataset generator *4mdgen* is placed in the `4mdgen/` directory.
 
 ### Build the dataset generator
 
@@ -24,7 +24,7 @@ A DDL script is placed in the `./ddl/` directory.
 
 ## Test queries (decision support queries)
 
-SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `./query/` directory.
+SQL scripts of the following test queries (4mQ.1 to 4mQ.6) are placed in the `./query/` directory.
 
 - Production amount analysis (4mQ.1)
 - Equipment availability analysis (4mQ.2)
@@ -45,4 +45,4 @@ SQL scripts of the following test queries (m4Q.1 to m4Q.6) are placed in the `./
 
 ## License
 
-m4bench is under MIT license. See LICENSE.
+4mbench is under MIT license. See LICENSE.
