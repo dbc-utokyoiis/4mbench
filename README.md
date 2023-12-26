@@ -33,6 +33,7 @@ A DDL script is placed in the `./ddl/` directory.
 ## Test queries (decision support queries)
 
 SQL scripts of the following test queries (4mQ.1 to 4mQ.6) are placed in the `./query/` directory.
+Currently, SQL files are provided for PostgreSQL (`./query/psql/`) and HADB (`./query/hadb/`).
 
 - Production amount analysis (4mQ.1)
 - Equipment availability analysis (4mQ.2)
